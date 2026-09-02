@@ -1,6 +1,6 @@
 import { Router } from "express"
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
-import { getReportsList, createNewReport } from "../services/reports.js"
+import { getReportsList, createNewReport, deleteReport, clearAllReports } from "../services/reports.js"
 import { DateRange } from "../services/analytics.js"
 
 const router = Router()
@@ -27,6 +27,33 @@ router.post("/reports/generate", requireAuth, async (req: AuthRequest, res, next
       return res.status(400).json({ error: result.error })
     }
     return res.status(201).json(result.data)
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete("/reports/:id", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const workspaceId = req.user!.workspaceId
+    const reportId = req.params.id
+    const result = await deleteReport(workspaceId, reportId)
+    if (result.error) {
+      return res.status(400).json({ error: result.error })
+    }
+    return res.status(200).json({ success: true, message: "Report deleted successfully" })
+  } catch (err) {
+    next(err)
+  }
+})
+
+router.delete("/reports", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const workspaceId = req.user!.workspaceId
+    const result = await clearAllReports(workspaceId)
+    if (result.error) {
+      return res.status(400).json({ error: result.error })
+    }
+    return res.status(200).json({ success: true, message: "All reports cleared successfully" })
   } catch (err) {
     next(err)
   }

@@ -27,3 +27,27 @@ export async function getReportsList(workspaceId: string) {
 export async function createNewReport(workspaceId: string, range: DateRange = "30d") {
   return generateInsightsReport(workspaceId, range)
 }
+
+export async function deleteReport(workspaceId: string, reportId: string) {
+  try {
+    await prisma.report.deleteMany({
+      where: { id: reportId, workspaceId }
+    })
+    return { error: null, success: true }
+  } catch (error) {
+    console.error("Failed to delete report:", error)
+    return { error: "Failed to delete report", success: false }
+  }
+}
+
+export async function clearAllReports(workspaceId: string) {
+  try {
+    await prisma.report.deleteMany({
+      where: { workspaceId }
+    })
+    return { error: null, success: true }
+  } catch (error) {
+    console.error("Failed to clear reports:", error)
+    return { error: "Failed to clear reports history", success: false }
+  }
+}

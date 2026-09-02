@@ -1,7 +1,7 @@
 "use client"
 
 import Link from "next/link"
-import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle2, Printer, Layers, Zap } from "lucide-react"
+import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle2, Printer, Layers, Zap, Trash2 } from "lucide-react"
 
 function getItemText(item: any): string {
   if (!item) return ""
@@ -21,7 +21,7 @@ function getItemText(item: any): string {
   return String(item)
 }
 
-export function ReportView({ report, title, dateStr }: { report: any, title: string, dateStr: string }) {
+export function ReportView({ report, title, dateStr, onDelete }: { report: any, title: string, dateStr: string, onDelete?: () => void }) {
   const summaryText = report?.summary || report?.executiveSummary || "No summary provided."
   const keyThemes = report?.keyThemes || report?.keyTrends || []
   const painPoints = report?.painPoints || report?.topCustomerPains || []
@@ -86,13 +86,25 @@ export function ReportView({ report, title, dateStr }: { report: any, title: str
           <Sparkles className="w-5 h-5 text-blue-500 print:hidden" />
           <h2 className="text-xl font-bold text-zinc-900 dark:text-white print:text-black">{title}</h2>
           <div className="flex-1" />
-          <button 
-            onClick={() => window.print()}
-            className="print:hidden flex items-center space-x-2 px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-          >
-            <Printer className="w-4 h-4" />
-            <span>Export PDF</span>
-          </button>
+          <div className="flex items-center space-x-2">
+            <button 
+              onClick={() => window.print()}
+              className="print:hidden flex items-center space-x-2 px-3 py-1.5 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+            >
+              <Printer className="w-4 h-4" />
+              <span>Export PDF</span>
+            </button>
+            {onDelete && (
+              <button
+                onClick={onDelete}
+                title="Delete this report"
+                className="print:hidden flex items-center space-x-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/30 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 rounded-md text-sm font-medium transition-colors"
+              >
+                <Trash2 className="w-4 h-4" />
+                <span>Delete</span>
+              </button>
+            )}
+          </div>
         </div>
         <p className="text-sm text-zinc-500 print:text-zinc-600">{dateStr}</p>
       </div>
