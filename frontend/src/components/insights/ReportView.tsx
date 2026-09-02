@@ -1,10 +1,36 @@
 "use client"
 
-import { InsightReport } from "@/types/insights"
 import Link from "next/link"
 import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle2, Printer, Layers, Zap } from "lucide-react"
 
-export function ReportView({ report, title, dateStr }: { report: InsightReport, title: string, dateStr: string }) {
+function getItemText(item: any): string {
+  if (!item) return ""
+  if (typeof item === "string") return item
+  if (typeof item === "object") {
+    if (item.action) {
+      return `${item.action}${item.priority ? ` [${item.priority}]` : ""}${item.rationale ? `: ${item.rationale}` : ""}`
+    }
+    if (item.issue) {
+      return `${item.issue}${item.suggestedAction ? ` — Action: ${item.suggestedAction}` : ""}${item.frequency ? ` (${item.frequency} times)` : ""}`
+    }
+    if (item.title) {
+      return `${item.title}${item.description ? `: ${item.description}` : ""}`
+    }
+    return Object.values(item).filter((val) => typeof val === "string" || typeof val === "number").join(" - ")
+  }
+  return String(item)
+}
+
+export function ReportView({ report, title, dateStr }: { report: any, title: string, dateStr: string }) {
+  const summaryText = report?.summary || report?.executiveSummary || "No summary provided."
+  const keyThemes = report?.keyThemes || report?.keyTrends || []
+  const painPoints = report?.painPoints || report?.topCustomerPains || []
+  const positiveTrends = report?.positiveTrends || report?.sentimentAnalysis?.positiveDrivers || []
+  const negativeTrends = report?.negativeTrends || report?.sentimentAnalysis?.negativeDrivers || []
+  const featureRequests = report?.featureRequests || []
+  const recommendedActions = report?.recommendedActions || []
+  const risks = report?.risks || []
+
   const SectionHeader = ({ icon: Icon, title, color }: { icon: React.ElementType, title: string, color: string }) => (
     <div className="flex items-center space-x-2 mb-4">
       <div className={`p-2 rounded-lg ${color}`}>
@@ -14,33 +40,41 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
     </div>
   )
 
-  const ItemList = ({ items }: { items: string[] }) => {
+  const ItemList = ({ items }: { items?: any[] }) => {
     if (!items || items.length === 0) return <p className="text-sm text-zinc-500">None identified.</p>
     
     return (
       <ul className="space-y-3">
-        {items.map((item, i) => (
-          <li key={i} className="flex items-start bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 print:break-inside-avoid">
-            <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{item}</span>
-            <Link
-              href={`/feedback?query=${encodeURIComponent(item)}`}
-              className="ml-4 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0 print:hidden"
-            >
-              Drill down &rarr;
-            </Link>
-          </li>
-        ))}
+        {items.map((item, i) => {
+          const text = getItemText(item)
+          return (
+            <li key={i} className="flex items-start bg-zinc-50 dark:bg-zinc-800/50 p-3 rounded-lg border border-zinc-100 dark:border-zinc-800 print:break-inside-avoid">
+              <span className="flex-1 text-sm text-zinc-700 dark:text-zinc-300 leading-relaxed">{text}</span>
+              <Link
+                href={`/feedback?query=${encodeURIComponent(text)}`}
+                className="ml-4 text-xs font-medium text-blue-600 dark:text-blue-400 hover:underline flex-shrink-0 print:hidden"
+              >
+                Drill down &rarr;
+              </Link>
+            </li>
+          )
+        })}
       </ul>
     )
   }
 
-  const PlainList = ({ items }: { items?: string[] }) => {
+  const PlainList = ({ items }: { items?: any[] }) => {
     if (!items || items.length === 0) return <p className="text-sm text-zinc-500">None identified.</p>
     return (
-      <ul className="list-disc pl-5 space-y-1">
-        {items.map((item, i) => (
-          <li key={i} className="text-sm text-zinc-700 dark:text-zinc-300 print:break-inside-avoid">{item}</li>
-        ))}
+      <ul className="list-disc pl-5 space-y-2">
+        {items.map((item, i) => {
+          const text = getItemText(item)
+          return (
+            <li key={i} className="text-sm text-zinc-700 dark:text-zinc-300 print:break-inside-avoid">
+              {text}
+            </li>
+          )
+        })}
       </ul>
     )
   }
@@ -64,7 +98,7 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
       </div>
 
       <div className="p-6 space-y-8 print:p-0 print:py-6">
-        {report.metrics && (
+        {report?.metrics && (
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4 print:break-inside-avoid">
             <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 print:border-zinc-300">
               <p className="text-sm text-zinc-500 print:text-black">Total Feedback</p>
@@ -88,15 +122,15 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
         <section className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
           <h3 className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-2">Executive Summary</h3>
           <p className="text-zinc-800 dark:text-zinc-200 text-base leading-relaxed font-medium print:text-black">
-            {report.summary}
+            {summaryText}
           </p>
         </section>
 
-        {report.categoryAnalysis && report.categoryAnalysis.length > 0 && (
+        {report?.categoryAnalysis && report.categoryAnalysis.length > 0 && (
           <section>
             <SectionHeader icon={Layers} title="Category Breakdown" color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" />
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-              {report.categoryAnalysis.map((cat, idx) => (
+              {report.categoryAnalysis.map((cat: any, idx: number) => (
                 <div key={idx} className="p-3 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg">
                   <div className="flex items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
                     <span>{cat.category}</span>
@@ -113,20 +147,20 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <section>
-            <SectionHeader icon={CheckCircle2} title="Key Themes" color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
-            <ItemList items={report.keyThemes} />
+            <SectionHeader icon={CheckCircle2} title="Key Themes & Trends" color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
+            <ItemList items={keyThemes} />
           </section>
 
           <section>
             <SectionHeader icon={AlertTriangle} title="Customer Pain Points" color="bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" />
-            <ItemList items={report.painPoints} />
+            <ItemList items={painPoints} />
           </section>
 
-          {report.priorityImpact && report.priorityImpact.length > 0 && (
+          {report?.priorityImpact && report.priorityImpact.length > 0 && (
             <section className="lg:col-span-2">
               <SectionHeader icon={Zap} title="Priority & Impact Recommendations" color="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" />
               <div className="space-y-3">
-                {report.priorityImpact.map((item, idx) => (
+                {report.priorityImpact.map((item: any, idx: number) => (
                   <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
                     <div className="space-y-1 flex-1">
                       <div className="flex items-center space-x-2">
@@ -135,7 +169,7 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
                           item.impact === 'MEDIUM' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' :
                           'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-300'
                         }`}>
-                          {item.impact} IMPACT
+                          {item.impact || "MEDIUM"} IMPACT
                         </span>
                         <h4 className="font-semibold text-xs text-zinc-900 dark:text-white">{item.issue}</h4>
                       </div>
@@ -150,27 +184,29 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
           <section className="space-y-6">
             <div>
               <SectionHeader icon={TrendingUp} title="Positive Trends" color="bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400" />
-              <PlainList items={report.positiveTrends} />
+              <PlainList items={positiveTrends} />
             </div>
             <div>
               <SectionHeader icon={TrendingDown} title="Negative Trends" color="bg-red-100 text-red-600 dark:bg-red-900/30 dark:text-red-400" />
-              <PlainList items={report.negativeTrends} />
+              <PlainList items={negativeTrends} />
             </div>
           </section>
 
           <section className="space-y-6">
-            <div>
-              <SectionHeader icon={Lightbulb} title="Feature Requests" color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
-              <PlainList items={report.featureRequests} />
-            </div>
+            {featureRequests.length > 0 && (
+              <div>
+                <SectionHeader icon={Lightbulb} title="Feature Requests" color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
+                <PlainList items={featureRequests} />
+              </div>
+            )}
             <div>
               <SectionHeader icon={CheckCircle2} title="Recommended Actions" color="bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400" />
-              <PlainList items={report.recommendedActions} />
+              <PlainList items={recommendedActions} />
             </div>
-            {report.risks && report.risks.length > 0 && (
+            {risks && risks.length > 0 && (
               <div>
                 <SectionHeader icon={AlertTriangle} title="Risks" color="bg-orange-100 text-orange-600 dark:bg-orange-900/30 dark:text-orange-400" />
-                <PlainList items={report.risks} />
+                <PlainList items={risks} />
               </div>
             )}
           </section>
