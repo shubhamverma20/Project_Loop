@@ -1,110 +1,93 @@
-import { PrismaClient, Role, Status, Sentiment } from '@prisma/client'
+import { PrismaClient } from '@prisma/client'
 import { PrismaPg } from '@prisma/adapter-pg'
 import { Pool } from 'pg'
-import bcrypt from 'bcryptjs'
+import 'dotenv/config'
 
+// Use a separate pool for seeding to avoid connection limits
 const pool = new Pool({ connectionString: process.env.DATABASE_URL as string })
 const adapter = new PrismaPg(pool)
 const prisma = new PrismaClient({ adapter })
 
 async function main() {
-  console.log('Starting seed...')
-  
-  // Clean up existing data
-  await prisma.workspace.deleteMany()
-  console.log('Deleted existing workspaces.')
-
-  // 1. Create Workspace
-  const workspace = await prisma.workspace.create({
-    data: {
-      name: 'Acme Corp',
-    },
-  })
-  console.log(`Created workspace: ${workspace.name}`)
-
-  // 2. Create Users (ADMIN, ANALYST, VIEWER)
-  const passwordHash = await bcrypt.hash('password123', 10)
-
-  const admin = await prisma.user.create({
-    data: {
-      name: 'Alice Admin',
-      email: 'admin@acme.com',
-      passwordHash,
-      role: Role.ADMIN,
-      workspaceId: workspace.id,
-    },
-  })
-
-  const analyst = await prisma.user.create({
-    data: {
-      name: 'Bob Analyst',
-      email: 'analyst@acme.com',
-      passwordHash,
-      role: Role.ANALYST,
-      workspaceId: workspace.id,
-    },
-  })
-
-  const viewer = await prisma.user.create({
-    data: {
-      name: 'Charlie Viewer',
-      email: 'viewer@acme.com',
-      passwordHash,
-      role: Role.VIEWER,
-      workspaceId: workspace.id,
-    },
-  })
-
-  console.log('Created 3 users: Admin, Analyst, Viewer')
-
-  // 3. Create 120 realistic feedback items
-  const channels = ['Email', 'In-App', 'Twitter', 'Support Ticket', 'Survey']
-  const feedbackData = []
-
-  const templates = [
-    { text: "Great product, but the UI is a bit clunky.", sentiment: Sentiment.NEU, score: 0.2, category: "UI/UX" },
-    { text: "I absolutely love the new feature! It saved me so much time.", sentiment: Sentiment.POS, score: 0.9, category: "Feature Request" },
-    { text: "I can't seem to figure out how to export my data.", sentiment: Sentiment.NEG, score: -0.5, category: "Bug" },
-    { text: "The app crashed when I tried to upload a file.", sentiment: Sentiment.NEG, score: -0.8, category: "Bug" },
-    { text: "It's okay, does the job. Could be faster.", sentiment: Sentiment.NEU, score: 0.1, category: "Performance" },
-    { text: "Customer support was amazing and solved my issue in 5 minutes.", sentiment: Sentiment.POS, score: 0.8, category: "Customer Support" },
-    { text: "Pricing is way too high for what you get.", sentiment: Sentiment.NEG, score: -0.7, category: "Pricing" },
-    { text: "Please add a dark mode!", sentiment: Sentiment.NEU, score: 0.0, category: "Feature Request" },
-    { text: "Integration with Slack is flawless.", sentiment: Sentiment.POS, score: 0.7, category: "Integration" },
-    { text: "The onboarding process was confusing.", sentiment: Sentiment.NEG, score: -0.4, category: "UI/UX" },
-    { text: "I wish there was an Android app.", sentiment: Sentiment.NEU, score: 0.0, category: "Feature Request" },
-    { text: "Security features like MFA give me peace of mind.", sentiment: Sentiment.POS, score: 0.85, category: "Security" },
-    { text: "The new dashboard is very slow to load.", sentiment: Sentiment.NEG, score: -0.6, category: "Performance" },
-    { text: "Can we get role-based access control?", sentiment: Sentiment.NEU, score: 0.1, category: "Security" },
-    { text: "Billing page keeps throwing a 500 error.", sentiment: Sentiment.NEG, score: -0.9, category: "Bug" },
-  ]
-
-  for (let i = 0; i < 150; i++) {
-    const template = templates[i % templates.length]
-    const channel = channels[i % channels.length]
-    
-    // Add some random variation to dates (over last 90 days)
-    const date = new Date()
-    date.setDate(date.getDate() - Math.floor(Math.random() * 90))
-
-    feedbackData.push({
-      content: `${template.text} (Feedback #${i + 1})`,
-      channel: channel,
-      sentiment: template.sentiment,
-      sentimentScore: template.score,
-      category: template.category,
-      status: i % 5 === 0 ? Status.REVIEWED : (i % 10 === 0 ? Status.ACTIONED : Status.NEW),
-      workspaceId: workspace.id,
-      createdAt: date
-    })
+  if (process.env.NODE_ENV === 'production') {
+    console.warn('Seeding is disabled in production.')
+    process.exit(0)
   }
 
-  await prisma.feedback.createMany({
-    data: feedbackData
-  })
+  console.log('Seeding database with development data...')
 
-  console.log(`Created 120 feedback items for workspace ${workspace.name}`)
-  console.log('Seed completed successfully.')
+  // Fetch all workspaces to associate the feedback with
+  let workspaces = await prisma.workspace.findMany()
+  
+  if (workspaces.length === 0) {
+    const workspace = await prisma.workspace.create({
+      data: {
+        name: 'Development Workspace',
+      }
+    })
+    console.log(`Created workspace: ${workspace.id}`)
+    workspaces = [workspace]
+  }
+
+  for (const workspace of workspaces) {
+    console.log(`Seeding feedback for workspace: ${workspace.id} (${workspace.name})`)
+    
+    const sampleFeedbacks = [
+      {
+        content: 'The new dashboard is amazing, very fast and responsive!',
+        channel: 'Web App',
+        customerLabel: 'User123',
+        category: 'UI/UX',
+        sentiment: 'POS' as const,
+        workspaceId: workspace.id,
+        status: 'NEW' as const,
+      },
+      {
+        content: 'I keep getting an error when trying to export reports to PDF.',
+        channel: 'Email Support',
+        customerLabel: 'EnterpriseClient',
+        category: 'Bug',
+        sentiment: 'NEG' as const,
+        workspaceId: workspace.id,
+        status: 'NEW' as const,
+      },
+      {
+        content: 'Is there a way to integrate this with Slack?',
+        channel: 'Community Forum',
+        customerLabel: 'DevUser',
+        category: 'Feature Request',
+        sentiment: 'NEU' as const,
+        workspaceId: workspace.id,
+        status: 'NEW' as const,
+      },
+      {
+        content: 'Love the AI insights feature! It saves me so much time.',
+        channel: 'Twitter',
+        customerLabel: 'SocialUser',
+        category: 'Productivity',
+        sentiment: 'POS' as const,
+        workspaceId: workspace.id,
+        status: 'REVIEWED' as const,
+      },
+      {
+        content: 'Navigation is a bit confusing on mobile devices.',
+        channel: 'App Store',
+        customerLabel: 'MobileUser',
+        category: 'UI/UX',
+        sentiment: 'NEG' as const,
+        workspaceId: workspace.id,
+        status: 'ACTIONED' as const,
+      }
+    ]
+
+    for (const fb of sampleFeedbacks) {
+      await prisma.feedback.create({
+        data: fb
+      })
+    }
+  }
+
+  console.log('Database seeded successfully.')
 }
 
 main()
@@ -114,4 +97,5 @@ main()
   })
   .finally(async () => {
     await prisma.$disconnect()
+    await pool.end()
   })

@@ -4,6 +4,13 @@ import { vi } from 'vitest'
 vi.mock('@/lib/prisma', () => {
   return {
     prisma: {
+      workspace: {
+        findFirst: vi.fn(),
+        findUnique: vi.fn(),
+        findMany: vi.fn(),
+        create: vi.fn(),
+        update: vi.fn(),
+      },
       feedback: {
         findMany: vi.fn(),
         count: vi.fn(),
@@ -33,7 +40,11 @@ vi.mock('@/lib/prisma', () => {
   }
 })
 
-// Mock Session
+// Mock Session & Auth
+vi.mock('@/auth', () => ({
+  auth: vi.fn().mockResolvedValue(null)
+}))
+
 vi.mock('@/lib/auth/session', () => ({
   verifySession: vi.fn().mockResolvedValue({
     user: { id: 'user-1', workspaceId: 'workspace-1', role: 'ADMIN' }

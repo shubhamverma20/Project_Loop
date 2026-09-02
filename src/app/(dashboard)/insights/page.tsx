@@ -3,6 +3,7 @@ import { getReports, generateInsightsReport } from "@/app/actions/insights"
 import { InsightReport } from "@/types/insights"
 import { ReportView } from "@/components/insights/ReportView"
 import { AnalyticsSkeleton } from "@/components/analytics/AnalyticsSkeleton"
+import { GenerateForm } from "@/components/insights/GenerateForm"
 import { format } from "date-fns"
 import { Bot } from "lucide-react"
 import { revalidatePath } from "next/cache"
@@ -63,8 +64,12 @@ export default function InsightsPage() {
   async function handleGenerate(formData: FormData) {
     "use server"
     const range = formData.get("range") as "7d" | "30d" | "90d" | "custom"
-    await generateInsightsReport(range)
+    const result = await generateInsightsReport(range)
+    if (result.error) {
+      return { error: result.error }
+    }
     revalidatePath("/insights")
+    return {}
   }
 
   return (
@@ -75,20 +80,11 @@ export default function InsightsPage() {
             AI Insights <SparklesIcon className="w-5 h-5 text-blue-500" />
           </h1>
           <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Claude 3 AI analysis of customer feedback. Generates themes, risks, and recommendations.
+            {process.env.AI_PROVIDER || "Gemini"} AI analysis of customer feedback. Generates themes, risks, and recommendations.
           </p>
         </div>
 
-        <form action={handleGenerate} className="flex items-center space-x-2">
-          <select name="range" className="text-sm rounded-md border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-900">
-            <option value="7d">Last 7 Days</option>
-            <option value="30d" selected>Last 30 Days</option>
-            <option value="90d">Last 90 Days</option>
-          </select>
-          <button type="submit" className="px-4 py-2 bg-zinc-900 hover:bg-zinc-800 dark:bg-white dark:hover:bg-zinc-100 text-white dark:text-zinc-900 text-sm font-medium rounded-md transition-colors shadow-sm">
-            Generate Report
-          </button>
-        </form>
+        <GenerateForm action={handleGenerate} />
       </div>
 
       <Suspense fallback={<AnalyticsSkeleton />}>

@@ -8,7 +8,8 @@ import {
   Settings,
   LogOut,
   Sparkles,
-  Bot
+  Bot,
+  Database
 } from "lucide-react"
 import { signOut } from "next-auth/react"
 
@@ -31,6 +32,7 @@ export default function DashboardLayout({
   const navigation = [
     { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
     { name: "Feedback", href: "/feedback", icon: MessageSquare },
+    { name: "Data Sources", href: "/sources", icon: Database },
     { name: "AI Insights", href: "/insights", icon: Bot },
     { name: "Settings", href: "/settings", icon: Settings },
   ]

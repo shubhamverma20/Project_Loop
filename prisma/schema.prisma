@@ -48,11 +48,14 @@ model OtpVerification {
 model Workspace {
   id        String     @id @default(cuid())
   name      String
+  apiKey    String?    @default(cuid())
   createdAt DateTime   @default(now())
   users     User[]
   feedbacks Feedback[]
   themes    Theme[]
   reports   Report[]
+
+  @@index([apiKey])
 }
 
 model User {
@@ -86,6 +89,8 @@ model Feedback {
   workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   themes           FeedbackTheme[]
   embeddings       Embedding[]
+
+  @@index([workspaceId, createdAt])
 }
 
 model Theme {
@@ -125,6 +130,9 @@ model Report {
   workspaceId  String
   workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   generatedById String?
+
+  @@index([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, createdAt])
 }
 
 model Account {

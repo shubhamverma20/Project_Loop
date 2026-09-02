@@ -3,30 +3,34 @@ import { generateInsightsReport } from '@/app/actions/insights'
 import { InsightReportSchema } from '@/types/insights'
 import { prisma } from '@/lib/prisma'
 import { verifySession } from '@/lib/auth/session'
-import Anthropic from '@anthropic-ai/sdk'
+import { GoogleGenAI } from '@google/genai'
 
-// Mock Anthropic
-vi.mock('@anthropic-ai/sdk', () => {
-  const MockAnthropic = vi.fn()
-  MockAnthropic.prototype.messages = {
-    create: vi.fn().mockResolvedValue({
-      content: [{
-        type: 'text',
-        text: JSON.stringify({
-          summary: "Test summary",
-          keyThemes: ["Test theme"],
-          painPoints: ["Test pain"],
-          positiveTrends: [],
-          negativeTrends: [],
-          featureRequests: [],
-          risks: [],
-          recommendedActions: []
-        })
-      }]
+// Mock GoogleGenAI
+vi.mock('@google/genai', () => {
+  const MockGoogleGenAI = vi.fn()
+  MockGoogleGenAI.prototype.models = {
+    generateContent: vi.fn().mockResolvedValue({
+      text: JSON.stringify({
+        summary: "Test summary",
+        keyThemes: ["Test theme"],
+        painPoints: ["Test pain"],
+        positiveTrends: [],
+        negativeTrends: [],
+        featureRequests: [],
+        risks: [],
+        recommendedActions: []
+      })
     })
   }
-  return { default: MockAnthropic }
+  return { GoogleGenAI: MockGoogleGenAI }
 })
+
+vi.mock('@/lib/prisma', () => ({
+  prisma: {
+    report: { findFirst: vi.fn(), create: vi.fn() },
+    feedback: { findFirst: vi.fn(), findMany: vi.fn() }
+  }
+}))
 
 describe('AI Insights Engine', () => {
   beforeEach(() => {
@@ -67,6 +71,8 @@ describe('AI Insights Engine', () => {
       createdAt: new Date(),
       generatedById: 'u1'
     })
+
+    vi.mocked(prisma.feedback.findFirst).mockResolvedValueOnce(null)
 
     const res = await generateInsightsReport()
     

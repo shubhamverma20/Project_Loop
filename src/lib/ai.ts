@@ -1,7 +1,5 @@
-import Anthropic from "@anthropic-ai/sdk"
+import { GoogleGenAI, Type } from "@google/genai"
 import { z } from "zod"
-
-const anthropic = new Anthropic()
 
 export const classificationSchema = z.object({
   sentiment: z.enum(["POS", "NEU", "NEG"]),
@@ -30,10 +28,12 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
 }
 
 export async function classifyFeedback(text: string, existingThemes: string[] = []): Promise<ClassificationResult> {
-  if (!process.env.ANTHROPIC_API_KEY) {
-    console.warn("No ANTHROPIC_API_KEY found. Falling back to default classification.")
+  if (!process.env.GEMINI_API_KEY) {
+    console.warn("No GEMINI_API_KEY found. Falling back to default classification.")
     return DEFAULT_CLASSIFICATION
   }
+
+  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
   const themeContext = existingThemes.length > 0 
     ? `\n\nEXISTING THEMES (Prioritize reusing these if applicable, but you may invent new ones if none fit):\n${existingThemes.join(", ")}`
@@ -50,26 +50,48 @@ The JSON object must strictly match this schema:
   "themes": string[] (up to 3 short tags like "Pricing", "UX", "Bug"),
   "featureArea": string (a short label of the main product area mentioned, max 50 chars),
   "category": "Bug" | "Feature Request" | "Complaint" | "Praise" | "Question" | "Other"
-}${themeContext}
+}${themeContext}`
 
-Example valid response:
-{"sentiment":"NEG","sentimentScore":-0.8,"themes":["Bug","Login"],"featureArea":"Authentication","category":"Bug"}`
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      sentiment: { type: Type.STRING, enum: ["POS", "NEU", "NEG"] },
+      sentimentScore: { type: Type.NUMBER },
+      themes: { type: Type.ARRAY, items: { type: Type.STRING } },
+      featureArea: { type: Type.STRING },
+      category: { type: Type.STRING, enum: ["Bug", "Feature Request", "Complaint", "Praise", "Question", "Other"] }
+    },
+    required: ["sentiment", "sentimentScore", "themes", "featureArea", "category"]
+  }
 
-  const maxRetries = 2;
+  const maxRetries = 0;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
-      const response = await withTimeout(anthropic.messages.create({
-        model: "claude-3-haiku-20240307",
-        max_tokens: 1024,
-        system: systemPrompt,
-        messages: [{ role: "user", content: `Analyze this feedback:\n\n${text}` }],
-        temperature: 0.1,
-      }), 10000) // 10 second timeout
+      const response = await withTimeout(
+        ai.models.generateContent({
+          model: "gemini-3.6-flash",
+          contents: `Analyze this feedback:\n\n${text}`,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.1,
+            responseMimeType: "application/json",
+            responseSchema: responseSchema
+          }
+        }), 
+        8000
+      )
 
-      const rawContent = response.content[0].type === "text" ? response.content[0].text : ""
+      const rawContent = response.text || ""
       
-      const parsedJson = JSON.parse(rawContent.trim())
+      let textToParse = rawContent.trim()
+      if (textToParse.startsWith("\`\`\`json")) {
+        textToParse = textToParse.replace(/^\`\`\`json/, "").replace(/\`\`\`$/, "").trim()
+      } else if (textToParse.startsWith("\`\`\`")) {
+        textToParse = textToParse.replace(/^\`\`\`/, "").replace(/\`\`\`$/, "").trim()
+      }
+      
+      const parsedJson = JSON.parse(textToParse)
       const validatedData = classificationSchema.parse(parsedJson)
       
       return validatedData
@@ -78,7 +100,6 @@ Example valid response:
       if (attempt === maxRetries) {
         return DEFAULT_CLASSIFICATION
       }
-      // Wait before retrying (exponential backoff)
       await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
     }
   }

@@ -2,7 +2,7 @@
 
 import { InsightReport } from "@/types/insights"
 import Link from "next/link"
-import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle2, Printer } from "lucide-react"
+import { Sparkles, TrendingUp, TrendingDown, Lightbulb, AlertTriangle, CheckCircle2, Printer, Layers, Zap } from "lucide-react"
 
 export function ReportView({ report, title, dateStr }: { report: InsightReport, title: string, dateStr: string }) {
   const SectionHeader = ({ icon: Icon, title, color }: { icon: React.ElementType, title: string, color: string }) => (
@@ -34,7 +34,7 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
     )
   }
 
-  const PlainList = ({ items }: { items: string[] }) => {
+  const PlainList = ({ items }: { items?: string[] }) => {
     if (!items || items.length === 0) return <p className="text-sm text-zinc-500">None identified.</p>
     return (
       <ul className="list-disc pl-5 space-y-1">
@@ -66,6 +66,7 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
 
       <div className="p-6 space-y-8 print:p-0 print:py-6">
         
+        {/* Sentiment Analysis & Metrics */}
         {report.metrics && (
           <section className="grid grid-cols-2 md:grid-cols-4 gap-4 print:break-inside-avoid">
             <div className="p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-100 dark:border-zinc-800 print:border-zinc-300">
@@ -87,25 +88,72 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
           </section>
         )}
 
-        {/* Summary */}
-        <section>
-          <p className="text-zinc-700 dark:text-zinc-300 text-lg leading-relaxed font-medium print:text-black">
+        {/* Executive Summary */}
+        <section className="bg-blue-50/50 dark:bg-blue-950/20 p-4 rounded-xl border border-blue-100 dark:border-blue-900/30">
+          <h3 className="text-xs font-bold text-blue-900 dark:text-blue-200 uppercase tracking-wider mb-2">Executive Summary</h3>
+          <p className="text-zinc-800 dark:text-zinc-200 text-base leading-relaxed font-medium print:text-black">
             {report.summary}
           </p>
         </section>
 
+        {/* Category Analysis */}
+        {report.categoryAnalysis && report.categoryAnalysis.length > 0 && (
+          <section>
+            <SectionHeader icon={Layers} title="Category Breakdown" color="bg-indigo-100 text-indigo-600 dark:bg-indigo-900/30 dark:text-indigo-400" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+              {report.categoryAnalysis.map((cat, idx) => (
+                <div key={idx} className="p-3 bg-zinc-50 dark:bg-zinc-800/40 border border-zinc-200 dark:border-zinc-800 rounded-lg">
+                  <div className="flex items-center justify-between text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">
+                    <span>{cat.category}</span>
+                    <span className="font-mono text-blue-600 dark:text-blue-400">{cat.count} ({cat.percentage}%)</span>
+                  </div>
+                  <div className="w-full bg-zinc-200 dark:bg-zinc-700 h-1.5 rounded-full overflow-hidden">
+                    <div className="bg-blue-500 h-full rounded-full" style={{ width: `${Math.min(cat.percentage, 100)}%` }} />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Themes */}
+          {/* Key Themes */}
           <section>
             <SectionHeader icon={CheckCircle2} title="Key Themes" color="bg-emerald-100 text-emerald-600 dark:bg-emerald-900/30 dark:text-emerald-400" />
             <ItemList items={report.keyThemes} />
           </section>
 
-          {/* Pain Points */}
+          {/* Customer Pain Points */}
           <section>
             <SectionHeader icon={AlertTriangle} title="Customer Pain Points" color="bg-rose-100 text-rose-600 dark:bg-rose-900/30 dark:text-rose-400" />
             <ItemList items={report.painPoints} />
           </section>
+
+          {/* Priority / Impact Matrix */}
+          {report.priorityImpact && report.priorityImpact.length > 0 && (
+            <section className="lg:col-span-2">
+              <SectionHeader icon={Zap} title="Priority & Impact Recommendations" color="bg-purple-100 text-purple-600 dark:bg-purple-900/30 dark:text-purple-400" />
+              <div className="space-y-3">
+                {report.priorityImpact.map((item, idx) => (
+                  <div key={idx} className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-3">
+                    <div className="space-y-1 flex-1">
+                      <div className="flex items-center space-x-2">
+                        <span className={`px-2 py-0.5 text-[10px] font-semibold rounded-full ${
+                          item.impact === 'HIGH' ? 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300' :
+                          item.impact === 'MEDIUM' ? 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300' :
+                          'bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-300'
+                        }`}>
+                          {item.impact} IMPACT
+                        </span>
+                        <h4 className="font-semibold text-xs text-zinc-900 dark:text-white">{item.issue}</h4>
+                      </div>
+                      <p className="text-xs text-zinc-600 dark:text-zinc-400">{item.recommendation}</p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Trends */}
           <section className="space-y-6">
@@ -119,7 +167,7 @@ export function ReportView({ report, title, dateStr }: { report: InsightReport, 
             </div>
           </section>
 
-          {/* Actionable */}
+          {/* Recommendations & Actionables */}
           <section className="space-y-6">
             <div>
               <SectionHeader icon={Lightbulb} title="Feature Requests" color="bg-amber-100 text-amber-600 dark:bg-amber-900/30 dark:text-amber-400" />
