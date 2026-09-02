@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import Link from "next/link"
 import Script from "next/script"
 import { api } from "@/lib/api-client"
 
@@ -14,8 +13,6 @@ declare global {
 
 export default function LoginPage() {
   const router = useRouter()
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
 
@@ -43,7 +40,7 @@ export default function LoginPage() {
       }
 
       if (!userEmail) {
-        setError("Failed to obtain user details from Google Sign In")
+        setError("Unable to sign in with Google. Please try again.")
         setLoading(false)
         return
       }
@@ -55,12 +52,12 @@ export default function LoginPage() {
       })
 
       if (res.error) {
-        setError(res.error)
+        setError("Unable to sign in with Google. Please try again.")
       } else {
         router.push("/dashboard")
       }
     } catch {
-      setError("Failed to sign in with Google")
+      setError("Unable to sign in with Google. Please try again.")
     } finally {
       setLoading(false)
     }
@@ -88,26 +85,6 @@ export default function LoginPage() {
     initGoogleAuth()
   }, [])
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError(null)
-    setLoading(true)
-
-    try {
-      const res = await api.post("/api/auth/login", { email, password })
-
-      if (res.error) {
-        setError(res.error)
-      } else {
-        router.push("/dashboard")
-      }
-    } catch {
-      setError("An unexpected error occurred. Please try again.")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const handleGoogleFallbackClick = () => {
     if (window.google?.accounts?.id) {
       window.google.accounts.id.prompt()
@@ -129,54 +106,16 @@ export default function LoginPage() {
           </div>
 
           {error && (
-            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-800">
+            <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/20 dark:text-red-400 rounded-lg border border-red-200 dark:border-red-800 text-center">
               {error}
             </div>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1">Work Email</label>
-              <input
-                type="email"
-                required
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="name@company.com"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
+          {loading && (
+            <div className="text-center text-sm text-blue-600 dark:text-blue-400">
+              Signing in with Google...
             </div>
-
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">Password</label>
-                <Link href="/forgot-password" className="text-xs text-blue-600 dark:text-blue-400 hover:underline">
-                  Forgot password?
-                </Link>
-              </div>
-              <input
-                type="password"
-                required
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
-                className="w-full px-3 py-2 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium text-sm rounded-lg transition-colors disabled:opacity-50"
-            >
-              {loading ? "Signing in..." : "Sign in"}
-            </button>
-          </form>
-
-          <div className="relative my-4">
-            <div className="absolute inset-0 flex items-center"><div className="w-full border-t border-zinc-200 dark:border-zinc-800" /></div>
-            <div className="relative flex justify-center text-xs uppercase"><span className="bg-white dark:bg-zinc-900 px-2 text-zinc-500">Or continue with</span></div>
-          </div>
+          )}
 
           <div id="googleBtnDiv" className="w-full flex justify-center min-h-[44px]">
             <button
@@ -187,13 +126,6 @@ export default function LoginPage() {
               <span>Sign in with Google</span>
             </button>
           </div>
-
-          <p className="text-center text-xs text-zinc-500">
-            Don&apos;t have an account?{" "}
-            <Link href="/register" className="text-blue-600 dark:text-blue-400 hover:underline font-medium">
-              Sign up
-            </Link>
-          </p>
         </div>
       </div>
     </>

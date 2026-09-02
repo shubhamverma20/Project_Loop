@@ -4,6 +4,14 @@ import { requestPasswordReset, verifyOtpAndResetPassword } from "../services/otp
 import { requireAuth, AuthRequest } from "../middleware/auth.js"
 
 const router = Router()
+const isProd = process.env.NODE_ENV === "production"
+
+const cookieOptions = {
+  httpOnly: true,
+  secure: isProd,
+  sameSite: isProd ? ("none" as const) : ("lax" as const),
+  maxAge: 7 * 24 * 60 * 60 * 1000
+}
 
 router.post("/google", async (req, res, next) => {
   try {
@@ -13,12 +21,7 @@ router.post("/google", async (req, res, next) => {
       return res.status(400).json({ error: result.error })
     }
 
-    res.cookie("session_token", result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    })
+    res.cookie("session_token", result.token, cookieOptions)
 
     return res.status(200).json(result)
   } catch (err) {
@@ -33,12 +36,7 @@ router.post("/register", async (req, res, next) => {
       return res.status(400).json({ error: result.error })
     }
 
-    res.cookie("session_token", result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    })
+    res.cookie("session_token", result.token, cookieOptions)
 
     return res.status(201).json(result)
   } catch (err) {
@@ -53,12 +51,7 @@ router.post("/login", async (req, res, next) => {
       return res.status(401).json({ error: result.error })
     }
 
-    res.cookie("session_token", result.token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 7 * 24 * 60 * 60 * 1000
-    })
+    res.cookie("session_token", result.token, cookieOptions)
 
     return res.status(200).json(result)
   } catch (err) {
@@ -67,7 +60,7 @@ router.post("/login", async (req, res, next) => {
 })
 
 router.post("/logout", (req, res) => {
-  res.clearCookie("session_token")
+  res.clearCookie("session_token", cookieOptions)
   return res.status(200).json({ success: true, message: "Logged out successfully" })
 })
 
