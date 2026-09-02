@@ -24,10 +24,11 @@ export function useLiveFeedback(onNewFeedbackReceived?: (item: LiveFeedbackItem)
   useEffect(() => {
     let es: EventSource | null = null
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+    const savedToken = typeof window !== "undefined" ? localStorage.getItem("session_token") : ""
 
     try {
-      // Create EventSource with credentials allowed for cross-origin cookie auth
-      es = new EventSource(`${apiUrl}/api/feedback/stream`, { withCredentials: true })
+      const streamUrl = `${apiUrl}/api/feedback/stream${savedToken ? `?token=${encodeURIComponent(savedToken)}` : ""}`
+      es = new EventSource(streamUrl, { withCredentials: true })
       eventSourceRef.current = es
 
       es.onopen = () => {
@@ -52,7 +53,6 @@ export function useLiveFeedback(onNewFeedbackReceived?: (item: LiveFeedbackItem)
 
       es.onerror = () => {
         setConnected(false)
-        // EventSource will automatically attempt reconnection
       }
     } catch (err) {
       console.warn("EventSource not supported or failed to initialize:", err)
