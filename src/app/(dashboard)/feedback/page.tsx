@@ -1,8 +1,8 @@
 import { searchFeedback } from "@/app/actions/explorer"
 import { AdvancedFilters } from "@/components/AdvancedFilters"
 import { StatusDropdown } from "@/components/StatusDropdown"
+import { ReclassifyButton } from "@/components/ReclassifyButton"
 import { Pagination } from "@/components/Pagination"
-// ReclassifyButton removed
 import { Sentiment } from "@prisma/client"
 import { Clock, Tag } from "lucide-react"
 
@@ -81,7 +81,7 @@ export default async function FeedbackInboxPage({
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Channel</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Sentiment</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-zinc-900 divide-y divide-zinc-200 dark:divide-zinc-800">
@@ -116,7 +116,10 @@ export default async function FeedbackInboxPage({
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <StatusDropdown id={item.id} currentStatus={item.status} />
+                      <div className="flex items-center space-x-2">
+                        <StatusDropdown id={item.id} currentStatus={item.status} />
+                        <ReclassifyButton id={item.id} />
+                      </div>
                     </td>
                   </tr>
                 ))}

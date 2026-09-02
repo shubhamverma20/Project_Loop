@@ -1,3 +1,5 @@
-import FeedbackPage from "../feedback/page"
+import { redirect } from "next/navigation"
 
-export default FeedbackPage
+export default function ExplorerPage() {
+  redirect("/feedback")
+}

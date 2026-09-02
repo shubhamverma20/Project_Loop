@@ -1,7 +1,7 @@
 "use client"
 
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { useTransition } from "react"
+import { useTransition, useState, useEffect, useCallback } from "react"
 import { Search } from "lucide-react"
 
 export function AdvancedFilters() {
@@ -10,20 +10,34 @@ export function AdvancedFilters() {
   const searchParams = useSearchParams()
   const [isPending, startTransition] = useTransition()
 
-  const handleFilterChange = (key: string, value: string) => {
-    const params = new URLSearchParams(searchParams.toString())
-    if (value) {
-      params.set(key, value)
-    } else {
-      params.delete(key)
-    }
-    // reset to page 1 on filter change
-    params.set("page", "1")
+  const currentQuery = searchParams.get("query") || ""
+  const [queryTerm, setQueryTerm] = useState(currentQuery)
 
-    startTransition(() => {
-      router.push(`${pathname}?${params.toString()}`)
-    })
-  }
+  const handleFilterChange = useCallback(
+    (key: string, value: string) => {
+      const params = new URLSearchParams(searchParams.toString())
+      if (value) {
+        params.set(key, value)
+      } else {
+        params.delete(key)
+      }
+      params.set("page", "1")
+
+      startTransition(() => {
+        router.push(`${pathname}?${params.toString()}`)
+      })
+    },
+    [searchParams, pathname, router]
+  )
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (queryTerm !== currentQuery) {
+        handleFilterChange("query", queryTerm)
+      }
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [queryTerm, currentQuery, handleFilterChange])
 
   return (
     <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 mb-6 shadow-sm space-y-4">
@@ -32,8 +46,8 @@ export function AdvancedFilters() {
         <input
           type="text"
           placeholder="Semantic Search (e.g. 'users complaining about payment')"
-          defaultValue={searchParams.get("query") || ""}
-          onChange={(e) => handleFilterChange("query", e.target.value)}
+          value={queryTerm}
+          onChange={(e) => setQueryTerm(e.target.value)}
           className="w-full pl-9 pr-4 py-2 bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-sm focus:ring-2 focus:ring-blue-500 transition-shadow"
         />
       </div>

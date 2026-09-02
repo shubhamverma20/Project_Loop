@@ -67,7 +67,31 @@ export async function searchFeedback(filters: SearchFilters, page = 1, limit = 1
     if (filters.endDate) where.createdAt.lte = new Date(filters.endDate)
   }
 
-  // 3. Execute final query with pagination
+  // 3. Item 5 Fix: If vector search is active, fetch all matching rows, sort by vector score, then slice
+  if (feedbackIds) {
+    const [total, allMatchingData] = await Promise.all([
+      prisma.feedback.count({ where }),
+      prisma.feedback.findMany({
+        where,
+        include: {
+          themes: {
+            include: { theme: true }
+          }
+        }
+      })
+    ])
+
+    const sortedData = [...allMatchingData].sort((a, b) => {
+      const indexA = feedbackIds!.indexOf(a.id)
+      const indexB = feedbackIds!.indexOf(b.id)
+      return indexA - indexB
+    })
+
+    const paginatedData = sortedData.slice(offset, offset + limit)
+    return { data: paginatedData, total }
+  }
+
+  // Standard non-vector query pagination
   const [total, data] = await Promise.all([
     prisma.feedback.count({ where }),
     prisma.feedback.findMany({
@@ -77,21 +101,11 @@ export async function searchFeedback(filters: SearchFilters, page = 1, limit = 1
           include: { theme: true }
         }
       },
-      orderBy: feedbackIds ? undefined : { createdAt: 'desc' }, // If vector search, maintain vector score ordering below
+      orderBy: { createdAt: 'desc' },
       take: limit,
       skip: offset
     })
   ])
 
-  // 4. If vector search was used, re-sort the paginated result to match semantic relevance
-  let sortedData = data
-  if (feedbackIds) {
-    sortedData = [...data].sort((a, b) => {
-      const indexA = feedbackIds!.indexOf(a.id)
-      const indexB = feedbackIds!.indexOf(b.id)
-      return indexA - indexB
-    })
-  }
-
-  return { data: sortedData, total }
+  return { data, total }
 }

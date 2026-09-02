@@ -3,6 +3,7 @@
 import { z } from "zod"
 import { prisma } from "@/lib/prisma"
 import bcrypt from "bcryptjs"
+import crypto from "crypto"
 import { Role } from "@prisma/client"
 
 const registerSchema = z.object({
@@ -30,7 +31,7 @@ export async function registerUser(prevState: unknown, formData: FormData) {
       where: { email }
     })
 
-    if (existingUser) {
+    if (existingUser && existingUser.workspaceId !== null) {
       return {
         error: "A user with this email already exists",
         success: false
@@ -38,24 +39,40 @@ export async function registerUser(prevState: unknown, formData: FormData) {
     }
 
     const passwordHash = await bcrypt.hash(password, 10)
+    const rawApiKey = "loop_sk_" + crypto.randomBytes(32).toString("hex")
+    const apiKeyHash = crypto.createHash("sha256").update(rawApiKey).digest("hex")
 
-    // Run within a transaction to ensure both workspace and user are created or neither
+    // Run within a transaction to ensure both workspace and user are created or updated
     await prisma.$transaction(async (tx) => {
       const workspace = await tx.workspace.create({
         data: {
           name: companyName,
+          apiKey: rawApiKey,
+          apiKeyHash: apiKeyHash
         }
       })
 
-      await tx.user.create({
-        data: {
-          name,
-          email,
-          passwordHash,
-          role: Role.ADMIN,
-          workspaceId: workspace.id
-        }
-      })
+      if (existingUser && existingUser.workspaceId === null) {
+        await tx.user.update({
+          where: { id: existingUser.id },
+          data: {
+            name,
+            passwordHash,
+            role: Role.ADMIN,
+            workspaceId: workspace.id
+          }
+        })
+      } else {
+        await tx.user.create({
+          data: {
+            name,
+            email,
+            passwordHash,
+            role: Role.ADMIN,
+            workspaceId: workspace.id
+          }
+        })
+      }
     })
 
     return {

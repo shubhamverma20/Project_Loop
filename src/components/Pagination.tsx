@@ -37,6 +37,28 @@ export function Pagination({ currentPage, totalPages, totalItems, limit }: Pagin
 
   return (
     <div className="flex items-center justify-between px-4 py-3 bg-white dark:bg-zinc-900 border-t border-zinc-200 dark:border-zinc-800 sm:px-6">
+      {/* Mobile-visible pager controls */}
+      <div className="flex flex-1 items-center justify-between sm:hidden">
+        <button
+          onClick={() => handlePageChange(currentPage - 1)}
+          disabled={currentPage === 1}
+          className="relative inline-flex items-center px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-xs font-medium rounded-md text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+        >
+          Previous
+        </button>
+        <span className="text-xs text-zinc-700 dark:text-zinc-300 font-medium">
+          Page {currentPage} of {totalPages}
+        </span>
+        <button
+          onClick={() => handlePageChange(currentPage + 1)}
+          disabled={currentPage >= totalPages}
+          className="relative inline-flex items-center px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 text-xs font-medium rounded-md text-zinc-700 dark:text-zinc-300 bg-white dark:bg-zinc-900 hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+        >
+          Next
+        </button>
+      </div>
+
+      {/* Desktop-visible full pager */}
       <div className="hidden sm:flex-1 sm:flex sm:items-center sm:justify-between">
         <div>
           <p className="text-sm text-zinc-700 dark:text-zinc-400">

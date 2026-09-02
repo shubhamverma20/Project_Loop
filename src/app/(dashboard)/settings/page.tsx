@@ -1,5 +1,6 @@
 import { getSettingsData } from "@/app/actions/settings"
 import { WorkspaceSettingsForm } from "@/components/settings/WorkspaceSettingsForm"
+import { ApiKeyCard } from "@/components/ApiKeyCard"
 import { TeamMembersManager } from "@/components/settings/TeamMembersManager"
 import { ProfileSettingsForm } from "@/components/settings/ProfileSettingsForm"
 import { ChangePasswordForm } from "@/components/settings/ChangePasswordForm"
@@ -22,6 +23,7 @@ export default async function SettingsPage() {
   }
 
   const { workspace, currentUser, members } = data
+  const hasApiKey = Boolean(workspace.apiKeyHash || workspace.apiKey)
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -35,6 +37,9 @@ export default async function SettingsPage() {
       <div className="space-y-6">
         {/* Workspace Identity & Settings */}
         <WorkspaceSettingsForm workspace={workspace} userRole={currentUser.role} />
+
+        {/* API Key Management */}
+        <ApiKeyCard hasApiKey={hasApiKey} userRole={currentUser.role} />
 
         {/* Team Members & Role Management */}
         <TeamMembersManager 

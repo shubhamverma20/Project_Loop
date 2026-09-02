@@ -20,7 +20,7 @@ export async function getSettingsData() {
     const [workspace, currentUser, members] = await Promise.all([
       prisma.workspace.findUnique({
         where: { id: workspaceId },
-        select: { id: true, name: true, apiKey: true, createdAt: true }
+        select: { id: true, name: true, apiKey: true, apiKeyHash: true, createdAt: true }
       }),
       prisma.user.findUnique({
         where: { id: userId },
@@ -57,6 +57,37 @@ export async function getSettingsData() {
 const workspaceNameSchema = z.object({
   name: z.string().trim().min(2, "Workspace name must be at least 2 characters").max(60, "Workspace name is too long")
 })
+
+export async function generateApiKey() {
+  const session = await verifySession()
+  if (!session?.user?.workspaceId) return { error: "Unauthorized", success: false, apiKey: null }
+
+  if (session.user.role !== "ADMIN") {
+    return { error: "Forbidden: Only workspace admins can generate API keys", success: false, apiKey: null }
+  }
+
+  const workspaceId = session.user.workspaceId
+
+  try {
+    const rawApiKey = "loop_sk_" + crypto.randomBytes(32).toString("hex")
+    const apiKeyHash = crypto.createHash("sha256").update(rawApiKey).digest("hex")
+
+    await prisma.workspace.update({
+      where: { id: workspaceId },
+      data: {
+        apiKeyHash,
+        apiKey: rawApiKey
+      }
+    })
+
+    revalidatePath("/settings")
+    revalidatePath("/sources")
+    return { success: true, error: null, apiKey: rawApiKey }
+  } catch (err) {
+    console.error("Generate API key error:", err)
+    return { error: "Failed to generate API key", success: false, apiKey: null }
+  }
+}
 
 export async function updateWorkspaceName(name: string) {
   const session = await verifySession()
@@ -186,6 +217,13 @@ export async function inviteTeamMember(payload: { email: string; name?: string; 
       where: { email }
     })
 
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { name: true }
+    })
+
+    const tempPassword = crypto.randomBytes(16).toString("hex")
+
     if (existingUser) {
       if (existingUser.workspaceId === workspaceId) {
         return { error: "This user is already a member of your workspace", success: false }
@@ -201,7 +239,6 @@ export async function inviteTeamMember(payload: { email: string; name?: string; 
       })
     } else {
       // Create new user record for invited team member
-      const tempPassword = crypto.randomBytes(16).toString("hex")
       const passwordHash = await bcrypt.hash(tempPassword, 10)
 
       await prisma.user.create({
@@ -214,6 +251,10 @@ export async function inviteTeamMember(payload: { email: string; name?: string; 
         }
       })
     }
+
+    // Send invitation email with credentials
+    const { sendInviteEmail } = await import("@/lib/email")
+    await sendInviteEmail(email, tempPassword, workspace?.name || "Project Loop Workspace", role)
 
     revalidatePath("/settings")
     return { success: true, error: null, message: `Successfully added ${email} to workspace as ${role}` }

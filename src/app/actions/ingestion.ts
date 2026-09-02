@@ -34,6 +34,61 @@ const PRICE_SYNONYMS = ["price", "cost", "amount", "unit_price", "unitprice"]
 const CATEGORY_SYNONYMS = ["category", "department", "group", "type"]
 const STOCK_SYNONYMS = ["stock", "quantity", "qty", "inventory"]
 
+export type IngestionResult =
+  | { success: true; duplicate?: boolean; message: string; feedback: { id: string; category: string | null; sentiment: string | null; channel: string } }
+  | { success: false; error: string }
+
+export async function ingestSingleFeedback(payload: { content: string; channel?: string; customerLabel?: string }): Promise<IngestionResult> {
+  const session = await verifySession()
+  if (!session?.user?.workspaceId) {
+    return { success: false, error: "Unauthorized: Session missing" }
+  }
+
+  if (!payload.content || !payload.content.trim()) {
+    return { success: false, error: "Content is required" }
+  }
+
+  try {
+    const result = await processSingleFeedback({
+      content: payload.content,
+      channel: payload.channel || "Test Ingestion",
+      customerLabel: payload.customerLabel || "Test User",
+      workspaceId: session.user.workspaceId
+    })
+
+    if ("duplicate" in result && result.duplicate) {
+      return {
+        success: true,
+        duplicate: true,
+        message: "Duplicate feedback detected. Existing item returned.",
+        feedback: {
+          id: result.feedback.id,
+          category: result.feedback.category,
+          sentiment: result.feedback.sentiment,
+          channel: result.feedback.channel
+        }
+      }
+    }
+
+    const feedback = "feedback" in result ? result.feedback : result
+
+    return {
+      success: true,
+      duplicate: false,
+      message: "Feedback submitted and processed successfully!",
+      feedback: {
+        id: feedback.id,
+        category: feedback.category,
+        sentiment: feedback.sentiment,
+        channel: feedback.channel
+      }
+    }
+  } catch (err: unknown) {
+    const errorMsg = err instanceof Error ? err.message : "Failed to process feedback"
+    return { success: false, error: errorMsg }
+  }
+}
+
 export async function bulkImportFeedback(parsedData: unknown[], datasetType?: "CUSTOMER_FEEDBACK" | "ECOMMERCE_PRODUCT") {
   const session = await verifySession()
   
@@ -395,5 +450,29 @@ export async function simulateChannelSync(channelName: string) {
     return { error: `Failed to sync ${channelName} channel`, success: false }
   }
 }
+
+export async function getWorkspaceApiKey() {
+  const session = await verifySession()
+  if (!session?.user?.workspaceId) {
+    return { apiKey: null, hasApiKey: false, error: "Unauthorized" }
+  }
+
+  try {
+    const workspace = await prisma.workspace.findUnique({
+      where: { id: session.user.workspaceId },
+      select: { apiKey: true, apiKeyHash: true }
+    })
+
+    return {
+      apiKey: workspace?.apiKey || null,
+      hasApiKey: Boolean(workspace?.apiKeyHash || workspace?.apiKey),
+      error: null
+    }
+  } catch (error) {
+    console.error("Failed to fetch workspace API key:", error)
+    return { apiKey: null, hasApiKey: false, error: "Failed to fetch workspace API key" }
+  }
+}
+
 
 

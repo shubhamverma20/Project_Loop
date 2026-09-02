@@ -1,3 +1,5 @@
-import SourcesPage from "../sources/page"
+import { redirect } from "next/navigation"
 
-export default SourcesPage
+export default function DataSourcesPage() {
+  redirect("/sources")
+}

@@ -1,5 +1,17 @@
 import type { NextAuthConfig } from 'next-auth'
 
+const PROTECTED_ROUTES = [
+  '/dashboard',
+  '/feedback',
+  '/explorer',
+  '/themes',
+  '/settings',
+  '/insights',
+  '/reports',
+  '/sources',
+  '/data-sources',
+]
+
 export const authConfig = {
   trustHost: true,
   pages: {
@@ -8,14 +20,18 @@ export const authConfig = {
   callbacks: {
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user
-      const isOnDashboard = nextUrl.pathname.startsWith('/dashboard') || 
-                            nextUrl.pathname.startsWith('/feedback') || 
-                            nextUrl.pathname.startsWith('/themes')
-      if (isOnDashboard) {
+      const isOnProtectedArea = PROTECTED_ROUTES.some(route => nextUrl.pathname.startsWith(route))
+
+      if (isOnProtectedArea) {
         if (isLoggedIn) return true
-        return false // Redirect to unauthenticated page
+        return false // Redirect unauthenticated users to login
       } else if (isLoggedIn) {
-        if (nextUrl.pathname.startsWith('/login') || nextUrl.pathname.startsWith('/signup') || nextUrl.pathname.startsWith('/forgot-password')) {
+        if (
+          nextUrl.pathname.startsWith('/login') ||
+          nextUrl.pathname.startsWith('/signup') ||
+          nextUrl.pathname.startsWith('/register') ||
+          nextUrl.pathname.startsWith('/forgot-password')
+        ) {
           return Response.redirect(new URL('/dashboard', nextUrl))
         }
       }

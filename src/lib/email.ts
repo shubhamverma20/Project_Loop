@@ -1,1 +1,1 @@
-export { sendOtpEmail } from "./brevo"
+export { sendOtpEmail, sendInviteEmail } from "./brevo"

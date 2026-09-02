@@ -64,7 +64,7 @@ The JSON object must strictly match this schema:
     required: ["sentiment", "sentimentScore", "themes", "featureArea", "category"]
   }
 
-  const maxRetries = 0;
+  const maxRetries = 2;
   
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {

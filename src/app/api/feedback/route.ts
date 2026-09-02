@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { z } from "zod"
+import crypto from "crypto"
 import { prisma } from "@/lib/prisma"
 import { auth } from "@/auth"
 import { checkRateLimit } from "@/lib/rate-limit"
@@ -14,6 +15,24 @@ const apiFeedbackSchema = z.object({
 
 export async function POST(req: NextRequest) {
   try {
+    const clientIp = req.ip || req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "unknown_ip"
+
+    // Item 3: Apply rate limiting BEFORE workspace authentication (stricter limit for unauthenticated attempts)
+    const preAuthLimit = checkRateLimit("unauth_api_" + clientIp, 20, 60 * 1000)
+    if (!preAuthLimit.success) {
+      return NextResponse.json(
+        { error: "Too many authentication attempts. Please try again later." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": Math.ceil((preAuthLimit.reset - Date.now()) / 1000).toString(),
+            "X-RateLimit-Limit": "20",
+            "X-RateLimit-Remaining": "0"
+          }
+        }
+      )
+    }
+
     // 1. Authenticate Request
     let workspaceId: string | null = null
 
@@ -24,9 +43,15 @@ export async function POST(req: NextRequest) {
     const apiKey = headerApiKey || bearerToken
 
     if (apiKey) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const workspace = await (prisma.workspace as any).findFirst({
-        where: { apiKey }
+      // Item 2: Hash incoming API key before DB lookup (with fallback for raw/seeded keys)
+      const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex")
+      const workspace = await prisma.workspace.findFirst({
+        where: {
+          OR: [
+            { apiKeyHash: keyHash },
+            { apiKey: apiKey }
+          ]
+        }
       })
       if (workspace) {
         workspaceId = workspace.id
@@ -52,9 +77,8 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // 2. Rate Limiting Check
-    const rateLimitIdentifier = apiKey || req.ip || "global_api"
-    const rateLimit = checkRateLimit(rateLimitIdentifier, 60, 60 * 1000)
+    // 2. Workspace Rate Limiting Check
+    const rateLimit = checkRateLimit("ws_api_" + workspaceId, 60, 60 * 1000)
 
     if (!rateLimit.success) {
       return NextResponse.json(
@@ -93,13 +117,34 @@ export async function POST(req: NextRequest) {
     const { content, channel, customerLabel, sourceRef } = validation.data
 
     // 4. Process Feedback through Core Ingestion Pipeline
-    const feedback = await processSingleFeedback({
+    const feedbackResult = await processSingleFeedback({
       content,
       channel: channel || "API",
       customerLabel,
       sourceRef,
       workspaceId
     })
+
+    // Item 10: Handle duplicate feedback cleanly
+    if ("duplicate" in feedbackResult && feedbackResult.duplicate) {
+      return NextResponse.json(
+        {
+          success: true,
+          duplicate: true,
+          message: "Duplicate feedback detected. Existing feedback returned.",
+          data: {
+            id: feedbackResult.feedback.id,
+            category: feedbackResult.feedback.category,
+            sentiment: feedbackResult.feedback.sentiment,
+            channel: feedbackResult.feedback.channel,
+            createdAt: feedbackResult.feedback.createdAt
+          }
+        },
+        { status: 200 }
+      )
+    }
+
+    const feedback = "feedback" in feedbackResult ? feedbackResult.feedback : feedbackResult
 
     return NextResponse.json(
       {

@@ -1,3 +1,5 @@
-import InsightsPage from "../insights/page"
+import { redirect } from "next/navigation"
 
-export default InsightsPage
+export default function ReportsPage() {
+  redirect("/insights")
+}

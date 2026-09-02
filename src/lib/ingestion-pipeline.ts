@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma"
 import { classifyFeedback } from "@/lib/ai"
 import { generateEmbedding } from "@/lib/embeddings"
 import { revalidatePath } from "next/cache"
+import sanitizeHtml from "sanitize-html"
 
 export interface IngestFeedbackParams {
   content: string
@@ -12,11 +13,11 @@ export interface IngestFeedbackParams {
 }
 
 export function sanitizeText(text: string): string {
-  // Strip script tags and HTML tags, trim excess whitespace
-  return text
-    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-    .replace(/<[^>]*>?/gm, "")
-    .trim()
+  if (!text) return ""
+  return sanitizeHtml(text, {
+    allowedTags: [],
+    allowedAttributes: {}
+  }).trim()
 }
 
 export function normalizeText(text: string): string {
@@ -32,6 +33,15 @@ export async function processSingleFeedback(params: IngestFeedbackParams) {
   }
 
   const normalizedContent = normalizeText(sanitizedContent)
+
+  // Item 10: Check if duplicate feedback exists in workspace
+  const existingFeedback = await prisma.feedback.findFirst({
+    where: { workspaceId, normalizedContent }
+  })
+
+  if (existingFeedback) {
+    return { duplicate: true as const, feedback: existingFeedback }
+  }
 
   // Fetch workspace themes for classification context
   const existingThemes = await prisma.theme.findMany({
@@ -109,5 +119,5 @@ export async function processSingleFeedback(params: IngestFeedbackParams) {
     // Ignored when executed outside Next.js request context (e.g. CLI scripts)
   }
 
-  return feedback
+  return { duplicate: false as const, feedback }
 }
