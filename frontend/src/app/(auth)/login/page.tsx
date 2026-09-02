@@ -33,7 +33,7 @@ export default function LoginPage() {
   }
 
   const handleGoogleSignIn = async () => {
-    const userEmail = prompt("Enter your Google Account email for demo authentication:")
+    const userEmail = prompt("Enter your Google Account email for authentication:", "shubhamverma0299@gmail.com")
     if (!userEmail) return
 
     setLoading(true)
