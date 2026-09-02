@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Script from "next/script"
 import { api } from "@/lib/api-client"
+import { Zap } from "lucide-react"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -103,15 +104,15 @@ export default function RegisterPage() {
     }
   }
 
-  const handleGoogleFallback = async () => {
-    const userEmail = prompt("Enter your Google Account email for instant sign in:", "shubhamverma0299@gmail.com")
-    if (!userEmail) return
+  const handleQuickDemoSignIn = async (customEmail?: string) => {
+    const targetEmail = customEmail || prompt("Enter Google email for instant sign in:", "shubhamverma0299@gmail.com")
+    if (!targetEmail) return
     setLoading(true)
     setError(null)
     try {
       const res = await api.post("/api/auth/google", {
-        email: userEmail,
-        name: userEmail.split("@")[0]
+        email: targetEmail,
+        name: targetEmail.split("@")[0]
       })
       if (res.error) {
         setError(res.error)
@@ -119,7 +120,7 @@ export default function RegisterPage() {
         router.push("/dashboard")
       }
     } catch {
-      setError("Failed to sign in with Google")
+      setError("Failed to sign in")
     } finally {
       setLoading(false)
     }
@@ -196,13 +197,25 @@ export default function RegisterPage() {
             <div className="relative flex justify-center text-xs uppercase"><span className="bg-white dark:bg-zinc-900 px-2 text-zinc-500">Or continue with</span></div>
           </div>
 
-          <div id="googleRegisterBtnDiv" className="w-full flex justify-center min-h-[44px]">
+          <div className="space-y-3">
+            <div id="googleRegisterBtnDiv" className="w-full flex justify-center min-h-[44px]">
+              <button
+                type="button"
+                onClick={() => handleQuickDemoSignIn()}
+                className="w-full py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 font-medium text-sm rounded-lg transition-colors flex items-center justify-center space-x-2"
+              >
+                <span>Sign up with Google</span>
+              </button>
+            </div>
+
             <button
               type="button"
-              onClick={handleGoogleFallback}
-              className="w-full py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 font-medium text-sm rounded-lg transition-colors flex items-center justify-center space-x-2"
+              onClick={() => handleQuickDemoSignIn("shubhamverma0299@gmail.com")}
+              disabled={loading}
+              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-medium text-xs rounded-lg transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50"
             >
-              <span>Sign up with Google</span>
+              <Zap className="w-3.5 h-3.5 fill-emerald-500 text-emerald-500" />
+              <span>One-Click Demo Account Sign Up</span>
             </button>
           </div>
 
