@@ -1,5 +1,6 @@
 "use client"
 
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import {
@@ -9,7 +10,8 @@ import {
   LogOut,
   Sparkles,
   Bot,
-  Database
+  Database,
+  Loader2
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 
@@ -20,6 +22,23 @@ export default function DashboardLayout({
 }) {
   const pathname = usePathname()
   const router = useRouter()
+  const [checkingAuth, setCheckingAuth] = useState(true)
+
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await api.get("/api/auth/me")
+        if (res.status === 401 || res.error) {
+          router.push("/login")
+        } else {
+          setCheckingAuth(false)
+        }
+      } catch {
+        router.push("/login")
+      }
+    }
+    checkAuth()
+  }, [router])
 
   const handleSignOut = async () => {
     try {
@@ -39,6 +58,15 @@ export default function DashboardLayout({
     { name: "Reports", href: "/reports", icon: Sparkles },
     { name: "Settings", href: "/settings", icon: Settings },
   ]
+
+  if (checkingAuth) {
+    return (
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-zinc-950 text-white space-y-4">
+        <Loader2 className="w-8 h-8 text-blue-500 animate-spin" />
+        <p className="text-sm font-medium text-zinc-400">Verifying session...</p>
+      </div>
+    )
+  }
 
   return (
     <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">

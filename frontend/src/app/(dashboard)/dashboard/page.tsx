@@ -1,7 +1,7 @@
 "use client"
 
 import { useEffect, useState, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { api } from "@/lib/api-client"
 import { VolumeChart } from "@/components/analytics/VolumeChart"
 import { SentimentChart } from "@/components/analytics/SentimentChart"
@@ -30,6 +30,7 @@ interface DashboardData {
 }
 
 function DashboardView() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const range = searchParams.get("range") || "30d"
   const customStart = searchParams.get("start") || undefined
@@ -49,6 +50,10 @@ function DashboardView() {
         if (customEnd) endpoint += `&customEnd=${customEnd}`
 
         const res = await api.get(endpoint)
+        if (res.status === 401) {
+          router.push("/login")
+          return
+        }
         if (res.error) {
           setError(res.error)
         } else if (res.data) {
@@ -61,7 +66,7 @@ function DashboardView() {
       }
     }
     loadData()
-  }, [range, customStart, customEnd])
+  }, [range, customStart, customEnd, router])
 
   if (loading) return <AnalyticsSkeleton />
 
