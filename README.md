@@ -1,113 +1,124 @@
-# Project LOOP - Customer Intelligence Platform
+# Project LOOP - Production Architecture
 
-Zidio Project LOOP is an AI-powered SaaS customer feedback intelligence platform designed to ingest, classify, and analyze customer feedback using Large Language Models and vector semantics.
+## Overview
+Project LOOP is a modern, enterprise-ready Customer Feedback & AI Analytics Platform split into a decoupled Production Architecture:
+- **FRONTEND**: Next.js 14 (App Router) deployed on **Vercel**
+- **BACKEND**: Node.js Express REST API & SSE Stream server deployed on **Render**
+- **DATABASE**: **Neon Serverless PostgreSQL** with `pgvector` vector database extension
+- **AI AGENT**: **Google Gemini AI** (`@google/genai`) for automated sentiment analysis, auto-categorization, vector embeddings, and executive report generation
+- **EMAIL & OTP**: **Brevo (Sendinblue)** API for transactional email verification and password reset OTPs
 
-## Technology Stack
+---
 
-- **Framework**: Next.js 14 App Router
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS & Lucide Icons
-- **Database**: PostgreSQL (hosted on Neon) with `pgvector` extension
-- **ORM**: Prisma
-- **Authentication**: NextAuth.js (Auth.js) Credentials Provider
-- **AI Classification/Narrative**: Anthropic Claude 3 Haiku API
-- **Embeddings**: Local `@xenova/transformers` (MiniLM-L6-v2)
-- **Charts**: Recharts
-- **Validation**: Zod
-- **Deployment**: Vercel
-
-## Architecture & Folder Structure
-
+## Workspace Structure
 ```
 Project_Loop/
-├── prisma/                 # Database schema and seed data
-├── src/
-│   ├── app/                # Next.js App Router
-│   │   ├── (dashboard)/    # Authenticated Routes (Dashboard, Feedback, Insights)
-│   │   ├── actions/        # Next.js Server Actions (Analytics, Insights, Feedback)
-│   │   ├── api/            # Route Handlers (Auth, Feedback Ingestion webhook)
-│   ├── components/         # Reusable UI components and charts
-│   ├── lib/                # Core utilities (Auth session, Prisma client, Embeddings init)
-│   └── types/              # Global TypeScript interfaces and Zod Schemas
-├── __tests__/              # Vitest suite
+├── backend/                  # Express REST API Server
+│   ├── prisma/               # Database schema & migrations (Prisma ONLY lives here)
+│   │   ├── schema.prisma
+│   │   └── seed.ts
+│   ├── src/
+│   │   ├── middleware/       # CORS, Auth JWT verification, Error handling
+│   │   ├── routes/           # REST endpoints (/api/auth, /api/feedback, /api/analytics, /api/settings, /api/reports)
+│   │   ├── services/         # Gemini AI, Brevo OTP, CSV Ingestion, Analytics, RBAC
+│   │   └── server.ts         # Express server listener (reads process.env.PORT)
+│   ├── tests/                # Vitest backend tests (GET /health)
+│   ├── package.json
+│   └── tsconfig.json
+│
+├── frontend/                 # Next.js 14 App Router UI
+│   ├── src/
+│   │   ├── app/              # Auth pages & (dashboard) layout/routes
+│   │   ├── components/       # UI cards, analytics charts, settings forms, filters
+│   │   ├── hooks/            # useLiveFeedback (SSE streaming hook)
+│   │   └── lib/              # api-client (fetch client with credentials: "include")
+│   ├── package.json
+│   └── tsconfig.json
 └── README.md
 ```
 
-## Features
+---
 
-- **Multi-tenant Architecture**: Isolated workspaces using Prisma middleware & row-level security concepts.
-- **Authentication**: Secure NextAuth/Auth.js with bcrypt hashed passwords.
-- **Semantic Search**: Powered by `pgvector` and `@xenova/transformers`. Search feedback by natural language meaning rather than exact keywords.
-- **AI Classification**: Auto-tagging, categorization, and sentiment analysis via Anthropic Claude 3 Haiku.
-- **Analytics Dashboard**: Highly performant server-side aggregations for Category, Channel, Sentiment, and Volume over custom Date Ranges.
-- **Voice of Customer (VoC) Reports**: AI-generated synthesized reports (Summary, Pain Points, Opportunities, Risks) from raw feedback. Caches natively to PostgreSQL to prevent duplicate AI costs. Exports cleanly to PDF.
+## Environment Variables Matrix
 
-## Setup & Initialization
+### Backend Environment Variables (`backend/.env`)
+| Variable | Description | Example |
+| :--- | :--- | :--- |
+| `PORT` | Express listener port (set by Render automatically) | `5000` |
+| `DATABASE_URL` | Neon PostgreSQL pooled connection string | `postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require` |
+| `DIRECT_URL` | Neon PostgreSQL direct connection string for migrations | `postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require` |
+| `JWT_SECRET` | Secret key for signing JWT cookies | `your_long_random_jwt_secret_key` |
+| `FRONTEND_URL` | Vercel frontend URL(s) allowed by CORS | `https://project-loop-frontend.vercel.app,http://localhost:3000` |
+| `GEMINI_API_KEY` | Google Gemini AI Key | `AIzaSy...` |
+| `BREVO_API_KEY` | Brevo API key for emails/OTPs | `xkeysib-...` |
+| `SENDER_EMAIL` | Sender email registered in Brevo | `noreply@yourdomain.com` |
+| `SENDER_NAME` | Sender display name | `Project LOOP Security` |
+| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | `xyz.apps.googleusercontent.com` |
 
-### Environment Variables
+### Frontend Environment Variables (`frontend/.env.local`)
+| Variable | Description | Example |
+| :--- | :--- | :--- |
+| `NEXT_PUBLIC_API_URL` | Express Backend URL | `https://project-loop-backend.onrender.com` |
+| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth Client ID | `xyz.apps.googleusercontent.com` |
 
-To run the project, ensure you have the following `.env` variables:
+---
 
-```env
-# Database (Neon PostgreSQL with pgvector)
-DATABASE_URL="postgres://user:password@hostname/dbname?pgbouncer=true&connect_timeout=15"
+## Deployment Step-by-Step Instructions
 
-# NextAuth
-NEXTAUTH_SECRET="your-32-character-secret-key"
-NEXTAUTH_URL="http://localhost:3000"
-
-# AI Configuration
-ANTHROPIC_API_KEY="sk-ant-api03-..."
-```
-
-### Local Setup
-
-1. Install dependencies:
+### 1. Database Setup (Neon PostgreSQL)
+1. Create a PostgreSQL project on [Neon.tech](https://neon.tech).
+2. Copy the **Pooled Connection String** (`DATABASE_URL`) and **Direct Connection String** (`DIRECT_URL`).
+3. Run migrations and seed data from `backend/`:
    ```bash
-   npm install
-   ```
-
-2. Sync Database & Extensions:
-   Make sure your Postgres instance supports `pgvector` (e.g., Neon).
-   ```bash
+   cd backend
    npx prisma db push
-   ```
-
-3. Seed Data:
-   Generates a mock workspace, Admin/Viewer users, and 150 realistic feedback entries.
-   ```bash
    npx prisma db seed
    ```
 
-4. Run Development Server:
+### 2. Backend Deployment (Render)
+1. Create a new **Web Service** on [Render.com](https://render.com).
+2. Connect your GitHub repository and set Root Directory to `backend`.
+3. Set Build Command:
    ```bash
-   npm run dev
+   npm install && npx prisma generate && npm run build
+   ```
+4. Set Start Command:
+   ```bash
+   npm start
+   ```
+5. Add all Backend environment variables in the Render Dashboard.
+6. Verify deployment by visiting `https://your-backend.onrender.com/health`. Output must be:
+   ```json
+   { "status": "ok" }
    ```
 
-## Testing
+### 3. Frontend Deployment (Vercel)
+1. Create a new project on [Vercel](https://vercel.com).
+2. Connect your GitHub repository and set Root Directory to `frontend`.
+3. Framework Preset: **Next.js**.
+4. Set Build Command: `npm run build`.
+5. Add Environment Variables:
+   - `NEXT_PUBLIC_API_URL` = `https://your-backend.onrender.com`
+   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` = `your_google_client_id`
+6. Deploy!
 
-Run the automated test suite (powered by Vitest):
+---
 
+## Verification & Build Commands
+
+### Backend Verification
 ```bash
-npm run test
+cd backend
+npm install
+npx tsc --noEmit
+npm test
+npm run build
 ```
 
-## Production Deployment (Vercel)
-
-The application is heavily optimized for Vercel deployment. 
-
-1. Push your code to a GitHub repository.
-2. In the Vercel dashboard, click **Add New... > Project**.
-3. Import your GitHub repository.
-4. Set the **Framework Preset** to Next.js.
-5. Under **Environment Variables**, add the three required variables: `DATABASE_URL`, `NEXTAUTH_SECRET`, and `ANTHROPIC_API_KEY`.
-6. (Optional) Set the NextAuth URL to your production domain: `NEXTAUTH_URL=https://your-domain.vercel.app`.
-7. Override the **Build Command** if you want to automatically push DB schema: `npx prisma generate && npx prisma db push && next build`
-8. Click **Deploy**.
-
-*Note: Since the embeddings model is loaded locally via `@xenova/transformers`, Vercel's Node environment handles the caching automatically during the serverless function cold start.*
-
-## Security Hardening
-- **Prisma Tenant Isolation**: All Prisma `findMany` and `count` operations explicitly require a `workspaceId` matching the authenticated user's session.
-- **Action Protection**: All `use server` files explicitly check `verifySession()` before processing payloads.
-- **Error Handling**: Graceful fallback UI provided via `app/error.tsx` and `app/not-found.tsx`.
+### Frontend Verification
+```bash
+cd frontend
+npm install
+npx tsc --noEmit
+npm run build
+```

@@ -108,6 +108,23 @@ describe('Direct Feedback API & Ingestion Pipeline', () => {
       expect(res.status).toBe(400)
       expect(data.error).toBe('Invalid request payload')
     })
+
+    it('should handle GET /api/feedback/stream session authentication', async () => {
+      const { GET: GET_STREAM } = await import('@/app/api/feedback/stream/route')
+      
+      vi.mocked(verifySession).mockResolvedValueOnce(null as any)
+      const unauthReq = { signal: { addEventListener: vi.fn() } } as any
+      const unauthRes = await GET_STREAM(unauthReq)
+      expect(unauthRes.status).toBe(401)
+
+      vi.mocked(verifySession).mockResolvedValueOnce({
+        user: { id: 'u1', workspaceId: 'workspace-123', role: 'ADMIN' }
+      } as any)
+      const authReq = { signal: { addEventListener: vi.fn() } } as any
+      const authRes = await GET_STREAM(authReq)
+      expect(authRes.status).toBe(200)
+      expect(authRes.headers.get('content-type')).toBe('text/event-stream')
+    })
   })
 
   describe('CSV Import Duplicate Prevention', () => {

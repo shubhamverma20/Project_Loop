@@ -1,0 +1,173 @@
+generator client {
+  provider = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider = "postgresql"
+  extensions = [vector]
+}
+
+enum Role {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
+enum Sentiment {
+  POS
+  NEU
+  NEG
+}
+
+enum Status {
+  NEW
+  REVIEWED
+  ACTIONED
+}
+
+enum OtpPurpose {
+  SIGNUP_VERIFICATION
+  PASSWORD_RESET
+}
+
+model OtpVerification {
+  id        String     @id @default(cuid())
+  email     String
+  otpHash   String
+  purpose   OtpPurpose
+  expiresAt DateTime
+  attempts  Int        @default(0)
+  createdAt DateTime   @default(now())
+
+  @@index([email])
+  @@index([purpose])
+  @@index([expiresAt])
+}
+
+model Workspace {
+  id          String     @id @default(cuid())
+  name        String
+  apiKey      String?    @unique
+  apiKeyHash  String?    @unique
+  createdAt   DateTime   @default(now())
+  users       User[]
+  feedbacks   Feedback[]
+  themes      Theme[]
+  reports     Report[]
+
+  @@index([apiKey])
+  @@index([apiKeyHash])
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?
+  image         String?
+  passwordHash  String?
+  role          Role      @default(VIEWER)
+  workspaceId   String?
+  workspace     Workspace? @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  accounts      Account[]
+  sessions      Session[]
+}
+
+model Feedback {
+  id               String          @id @default(cuid())
+  content          String
+  normalizedContent String?
+  channel          String
+  sourceRef        String?
+  customerLabel    String?
+  category         String?
+  sentiment        Sentiment?
+  sentimentScore   Float?
+  featureArea      String?
+  status           Status          @default(NEW)
+  createdAt        DateTime        @default(now())
+  workspaceId      String
+  workspace        Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  themes           FeedbackTheme[]
+  embeddings       Embedding[]
+
+  @@index([workspaceId, createdAt])
+}
+
+model Theme {
+  id          String          @id @default(cuid())
+  name        String
+  description String?
+  color       String?
+  workspaceId String
+  workspace   Workspace       @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  feedbacks   FeedbackTheme[]
+}
+
+model FeedbackTheme {
+  feedbackId String
+  themeId    String
+  confidence Float?
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+  theme      Theme    @relation(fields: [themeId], references: [id], onDelete: Cascade)
+
+  @@id([feedbackId, themeId])
+}
+
+model Embedding {
+  id         String   @id @default(cuid())
+  feedbackId String
+  vector     Unsupported("vector(384)")
+  feedback   Feedback @relation(fields: [feedbackId], references: [id], onDelete: Cascade)
+}
+
+model Report {
+  id           String    @id @default(cuid())
+  title        String
+  periodStart  DateTime
+  periodEnd    DateTime
+  contentJson  Json
+  createdAt    DateTime  @default(now())
+  workspaceId  String
+  workspace    Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  generatedById String?
+
+  @@index([workspaceId, periodStart, periodEnd])
+  @@index([workspaceId, createdAt])
+}
+
+model Account {
+  id                 String  @id @default(cuid())
+  userId             String
+  type               String
+  provider           String
+  providerAccountId  String
+  refresh_token      String?  @db.Text
+  access_token       String?  @db.Text
+  expires_at         Int?
+  token_type         String?
+  scope              String?
+  id_token           String?  @db.Text
+  session_state      String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
