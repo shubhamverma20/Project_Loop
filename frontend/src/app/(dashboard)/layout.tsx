@@ -29,11 +29,17 @@ export default function DashboardLayout({
       try {
         const res = await api.get("/api/auth/me")
         if (res.status === 401 || res.error) {
+          if (typeof window !== "undefined") {
+            localStorage.removeItem("session_token")
+          }
           router.push("/login")
         } else {
           setCheckingAuth(false)
         }
       } catch {
+        if (typeof window !== "undefined") {
+          localStorage.removeItem("session_token")
+        }
         router.push("/login")
       }
     }
@@ -46,7 +52,10 @@ export default function DashboardLayout({
     } catch (error) {
       console.error("Error signing out", error)
     } finally {
-      router.push("/login")
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("session_token")
+      }
+      window.location.href = "/login"
     }
   }
 
