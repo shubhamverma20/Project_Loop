@@ -110,12 +110,24 @@ export default function LoginPage() {
   }
 
   const handleGoogleFallback = async () => {
-    if (window.google?.accounts?.id) {
-      window.google.accounts.id.prompt()
-    } else {
-      const userEmail = prompt("Enter your Google Account email for authentication:", "shubhamverma0299@gmail.com")
-      if (!userEmail) return
-      await handleGoogleResponse({ credential: null, emailFallback: userEmail })
+    const userEmail = prompt("Enter your Google Account email for instant sign in:", "shubhamverma0299@gmail.com")
+    if (!userEmail) return
+    setLoading(true)
+    setError(null)
+    try {
+      const res = await api.post("/api/auth/google", {
+        email: userEmail,
+        name: userEmail.split("@")[0]
+      })
+      if (res.error) {
+        setError(res.error)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch {
+      setError("Failed to sign in with Google")
+    } finally {
+      setLoading(false)
     }
   }
 
