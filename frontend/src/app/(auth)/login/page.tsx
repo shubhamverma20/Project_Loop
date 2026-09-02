@@ -52,9 +52,9 @@ export default function LoginPage() {
       })
 
       if (res.error) {
-        setError("Unable to sign in with Google. Please try again.")
+        setError(res.error || "Unable to sign in with Google. Please try again.")
       } else {
-        router.push("/dashboard")
+        window.location.href = "/dashboard"
       }
     } catch {
       setError("Unable to sign in with Google. Please try again.")

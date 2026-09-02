@@ -11,6 +11,14 @@ export async function apiRequest<T = any>(
     headers.set("Content-Type", "application/json")
   }
 
+  // Attach bearer token if stored in localStorage for cross-domain auth fallback
+  if (typeof window !== "undefined") {
+    const savedToken = localStorage.getItem("session_token")
+    if (savedToken && !headers.has("Authorization")) {
+      headers.set("Authorization", `Bearer ${savedToken}`)
+    }
+  }
+
   try {
     const response = await fetch(url, {
       ...options,
@@ -27,7 +35,15 @@ export async function apiRequest<T = any>(
       responseData = await response.text()
     }
 
+    // Save token if returned in auth response
+    if (typeof window !== "undefined" && responseData && typeof responseData === "object" && responseData.token) {
+      localStorage.setItem("session_token", responseData.token)
+    }
+
     if (!response.ok) {
+      if (response.status === 401 && typeof window !== "undefined") {
+        localStorage.removeItem("session_token")
+      }
       const errorMessage = typeof responseData === "object" && responseData !== null && "error" in responseData
         ? String((responseData as { error: unknown }).error)
         : typeof responseData === "string" && responseData
