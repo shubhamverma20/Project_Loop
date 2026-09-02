@@ -15,7 +15,12 @@ function createPrismaClient(): PrismaClient {
   if (!connectionString) {
     throw new Error("DATABASE_URL environment variable is missing in backend")
   }
-  const pool = new Pool({ connectionString })
+  const pool = new Pool({
+    connectionString,
+    max: 10,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 10000
+  })
   const adapter = new PrismaPg(pool)
   return new PrismaClient({ adapter })
 }

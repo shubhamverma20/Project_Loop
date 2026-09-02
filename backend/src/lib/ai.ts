@@ -19,6 +19,16 @@ const DEFAULT_CLASSIFICATION: ClassificationResult = {
   category: "Other"
 }
 
+let aiClient: GoogleGenAI | null = null
+
+function getAiClient(): GoogleGenAI | null {
+  if (!process.env.GEMINI_API_KEY) return null
+  if (!aiClient) {
+    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+  }
+  return aiClient
+}
+
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   return Promise.race([
     promise,
@@ -27,12 +37,11 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
 }
 
 export async function classifyFeedback(text: string, existingThemes: string[] = []): Promise<ClassificationResult> {
-  if (!process.env.GEMINI_API_KEY) {
+  const ai = getAiClient()
+  if (!ai) {
     console.warn("No GEMINI_API_KEY found. Falling back to default classification.")
     return DEFAULT_CLASSIFICATION
   }
-
-  const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
 
   const themeContext = existingThemes.length > 0 
     ? `\n\nEXISTING THEMES (Prioritize reusing these if applicable, but you may invent new ones if none fit):\n${existingThemes.join(", ")}`
