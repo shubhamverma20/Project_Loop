@@ -5,7 +5,6 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import Script from "next/script"
 import { api } from "@/lib/api-client"
-import { Zap } from "lucide-react"
 
 declare global {
   interface Window {
@@ -44,7 +43,7 @@ export default function LoginPage() {
       }
 
       if (!userEmail) {
-        setError("Failed to obtain email from Google Authentication")
+        setError("Failed to obtain user details from Google Sign In")
         setLoading(false)
         return
       }
@@ -109,25 +108,9 @@ export default function LoginPage() {
     }
   }
 
-  const handleQuickDemoSignIn = async (customEmail?: string) => {
-    const targetEmail = customEmail || prompt("Enter Google email for instant sign in:", "shubhamverma0299@gmail.com")
-    if (!targetEmail) return
-    setLoading(true)
-    setError(null)
-    try {
-      const res = await api.post("/api/auth/google", {
-        email: targetEmail,
-        name: targetEmail.split("@")[0]
-      })
-      if (res.error) {
-        setError(res.error)
-      } else {
-        router.push("/dashboard")
-      }
-    } catch {
-      setError("Failed to sign in")
-    } finally {
-      setLoading(false)
+  const handleGoogleFallbackClick = () => {
+    if (window.google?.accounts?.id) {
+      window.google.accounts.id.prompt()
     }
   }
 
@@ -195,25 +178,13 @@ export default function LoginPage() {
             <div className="relative flex justify-center text-xs uppercase"><span className="bg-white dark:bg-zinc-900 px-2 text-zinc-500">Or continue with</span></div>
           </div>
 
-          <div className="space-y-3">
-            <div id="googleBtnDiv" className="w-full flex justify-center min-h-[44px]">
-              <button
-                type="button"
-                onClick={() => handleQuickDemoSignIn()}
-                className="w-full py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 font-medium text-sm rounded-lg transition-colors flex items-center justify-center space-x-2"
-              >
-                <span>Sign in with Google</span>
-              </button>
-            </div>
-
+          <div id="googleBtnDiv" className="w-full flex justify-center min-h-[44px]">
             <button
               type="button"
-              onClick={() => handleQuickDemoSignIn("shubhamverma0299@gmail.com")}
-              disabled={loading}
-              className="w-full py-2 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/30 dark:hover:bg-emerald-900/50 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 font-medium text-xs rounded-lg transition-colors flex items-center justify-center space-x-1.5 disabled:opacity-50"
+              onClick={handleGoogleFallbackClick}
+              className="w-full py-2.5 bg-white dark:bg-zinc-800 border border-zinc-300 dark:border-zinc-700 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 font-medium text-sm rounded-lg transition-colors flex items-center justify-center space-x-2"
             >
-              <Zap className="w-3.5 h-3.5 fill-emerald-500 text-emerald-500" />
-              <span>One-Click Demo Account Sign In</span>
+              <span>Sign in with Google</span>
             </button>
           </div>
 
