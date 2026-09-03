@@ -21,10 +21,13 @@ const DEFAULT_CLASSIFICATION: ClassificationResult = {
 
 let aiClient: GoogleGenAI | null = null
 
-function getAiClient(): GoogleGenAI | null {
-  if (!process.env.GEMINI_API_KEY) return null
+function getAiClient(): GoogleGenAI {
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) {
+    throw new Error("Gemini API key is not configured.")
+  }
   if (!aiClient) {
-    aiClient = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+    aiClient = new GoogleGenAI({ apiKey })
   }
   return aiClient
 }
@@ -38,10 +41,6 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
 
 export async function classifyFeedback(text: string, existingThemes: string[] = []): Promise<ClassificationResult> {
   const ai = getAiClient()
-  if (!ai) {
-    console.warn("No GEMINI_API_KEY found. Falling back to default classification.")
-    return DEFAULT_CLASSIFICATION
-  }
 
   const themeContext = existingThemes.length > 0 
     ? `\n\nEXISTING THEMES (Prioritize reusing these if applicable, but you may invent new ones if none fit):\n${existingThemes.join(", ")}`
@@ -72,13 +71,14 @@ The JSON object must strictly match this schema:
     required: ["sentiment", "sentimentScore", "themes", "featureArea", "category"]
   }
 
-  const maxRetries = 2
-  
+  let lastError: unknown = null
+
+  const maxRetries = 1
   for (let attempt = 0; attempt <= maxRetries; attempt++) {
     try {
       const response = await withTimeout(
         ai.models.generateContent({
-          model: "gemini-3.6-flash",
+          model: "gemini-2.5-flash",
           contents: `Analyze this feedback:\n\n${text}`,
           config: {
             systemInstruction: systemPrompt,
@@ -87,7 +87,7 @@ The JSON object must strictly match this schema:
             responseSchema: responseSchema
           }
         }), 
-        8000
+        10000
       )
 
       const rawContent = response.text || ""
@@ -103,14 +103,24 @@ The JSON object must strictly match this schema:
       const validatedData = classificationSchema.parse(parsedJson)
       
       return validatedData
-    } catch (error) {
-      console.error(`AI Classification Error (Attempt ${attempt + 1}):`, error)
-      if (attempt === maxRetries) {
-        return DEFAULT_CLASSIFICATION
+    } catch (error: any) {
+      lastError = error
+      console.error(`AI Classification Error (Attempt ${attempt + 1}):`, error?.message || error)
+
+      const msg = String(error?.message || error || "")
+      if (msg.includes("API key") || msg.includes("API_KEY") || msg.includes("401") || msg.includes("403") || msg.includes("UNAUTHENTICATED")) {
+        throw new Error("Gemini API Authentication Failed: Invalid or unauthorized API key")
       }
-      await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
+      if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+        throw new Error("Gemini API Rate Limit / Quota Exceeded. Please try again later.")
+      }
+
+      if (attempt < maxRetries) {
+        await new Promise(r => setTimeout(r, 1000 * Math.pow(2, attempt)))
+      }
     }
   }
-  
-  return DEFAULT_CLASSIFICATION
+
+  const errMessage = lastError instanceof Error ? lastError.message : String(lastError)
+  throw new Error(`Gemini AI Classification Failed: ${errMessage}`)
 }

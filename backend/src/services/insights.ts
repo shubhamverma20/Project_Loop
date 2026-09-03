@@ -78,7 +78,7 @@ export async function generateInsightsReport(
     }
 
     if (!process.env.GEMINI_API_KEY) {
-      return { error: "GEMINI_API_KEY environment variable is missing", data: null }
+      return { error: "Gemini API key is not configured.", data: null }
     }
 
     const feedbackList = await prisma.feedback.findMany({
@@ -97,7 +97,7 @@ export async function generateInsightsReport(
     })
 
     if (feedbackList.length === 0) {
-      return { error: "No feedback available for this date range. Sync or upload feedback first.", data: null }
+      return { error: "No feedback available for this date range. Submit, upload, or sync feedback first.", data: null }
     }
 
     const uniqueFeedbackSet = new Set<string>()
@@ -177,7 +177,7 @@ Return a raw JSON object ONLY with no markdown wrappers.`
     }
 
     const response = await ai.models.generateContent({
-      model: "gemini-3.6-flash",
+      model: "gemini-2.5-flash",
       contents: `Feedback Sample Data (${sampledFeedback.length} items):\n${JSON.stringify(sampledFeedback, null, 2)}`,
       config: {
         systemInstruction: systemPrompt,
@@ -215,6 +215,13 @@ Return a raw JSON object ONLY with no markdown wrappers.`
     }
   } catch (err: unknown) {
     console.error("Generate Insights Report Error:", err)
-    return { error: "Failed to generate AI insights report", data: null }
+    const errMessage = err instanceof Error ? err.message : String(err)
+    if (errMessage.includes("API key") || errMessage.includes("401") || errMessage.includes("403") || errMessage.includes("UNAUTHENTICATED")) {
+      return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key", data: null }
+    }
+    if (errMessage.includes("429") || errMessage.includes("RESOURCE_EXHAUSTED") || errMessage.includes("quota")) {
+      return { error: "Gemini API Rate Limit / Quota Exceeded. Please try again later.", data: null }
+    }
+    return { error: errMessage || "Failed to generate AI insights report", data: null }
   }
 }

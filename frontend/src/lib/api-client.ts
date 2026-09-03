@@ -1,4 +1,8 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000"
+const defaultApiUrl = process.env.NODE_ENV === "production"
+  ? "https://project-loop-llid.onrender.com"
+  : "http://localhost:5000"
+
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
 
 export async function apiRequest<T = any>(
   endpoint: string,
@@ -55,7 +59,10 @@ export async function apiRequest<T = any>(
 
     return { data: responseData as T, status: response.status }
   } catch (error: unknown) {
-    const errMessage = error instanceof Error ? error.message : "Network error. Unable to connect to server."
+    let errMessage = error instanceof Error ? error.message : "Network error. Unable to connect to server."
+    if (errMessage === "Failed to fetch") {
+      errMessage = `Unable to connect to backend server at ${API_BASE_URL}. Please ensure the backend server is running.`
+    }
     console.error(`API Request Error [${endpoint}]:`, error)
     return { error: errMessage, status: 500 }
   }

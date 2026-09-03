@@ -11,9 +11,9 @@ export const corsMiddleware = cors({
     }
 
     const isAllowed = allowedOrigins.some(allowed => origin === allowed || allowed === "*") ||
-      origin === "https://project-loop-fu2f-two.vercel.app" ||
-      origin === "http://localhost:3000" ||
-      (origin.startsWith("https://project-loop-") && origin.endsWith(".vercel.app"))
+      origin.endsWith(".vercel.app") ||
+      origin.startsWith("http://localhost:") ||
+      origin.startsWith("http://127.0.0.1:")
 
     if (isAllowed) {
       callback(null, true)

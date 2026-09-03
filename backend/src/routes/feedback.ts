@@ -1,5 +1,6 @@
 import { Router } from "express"
 import crypto from "crypto"
+import jwt from "jsonwebtoken"
 import { prisma } from "../lib/prisma.js"
 import { checkRateLimit } from "../lib/rate-limit.js"
 import { processSingleFeedback, simulateChannelSync } from "../services/ingestion.js"
@@ -32,20 +33,46 @@ router.post("/feedback", async (req, res, next) => {
     const headerApiKey = req.headers["x-api-key"] as string | undefined
     const authHeader = req.headers.authorization
     const bearerToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
-    const apiKey = headerApiKey || bearerToken
+    const cookieToken = req.cookies?.session_token
 
-    if (apiKey) {
-      const keyHash = crypto.createHash("sha256").update(apiKey).digest("hex")
+    // 1. Try Workspace API Key (via x-api-key header or Bearer header)
+    const possibleApiKey = headerApiKey || bearerToken
+    if (possibleApiKey) {
+      const keyHash = crypto.createHash("sha256").update(possibleApiKey).digest("hex")
       const workspace = await prisma.workspace.findFirst({
         where: {
           OR: [
             { apiKeyHash: keyHash },
-            { apiKey: apiKey }
+            { apiKey: possibleApiKey }
           ]
         }
       })
       if (workspace) {
         workspaceId = workspace.id
+      }
+    }
+
+    // 2. Fallback to JWT User Session token (from Bearer header, Cookie, or Query parameter)
+    if (!workspaceId) {
+      const token = bearerToken || cookieToken || (req.query.token as string | undefined)
+      if (token) {
+        try {
+          const secret = process.env.AUTH_SECRET || "default_dev_secret_key_32_chars_long"
+          const decoded = jwt.verify(token, secret) as { id?: string; workspaceId?: string }
+          if (decoded?.id) {
+            const user = await prisma.user.findUnique({
+              where: { id: decoded.id },
+              select: { workspaceId: true }
+            })
+            if (user?.workspaceId) {
+              workspaceId = user.workspaceId
+            }
+          } else if (decoded?.workspaceId) {
+            workspaceId = decoded.workspaceId
+          }
+        } catch {
+          // JWT token invalid or expired
+        }
       }
     }
 
@@ -218,4 +245,48 @@ router.post("/feedback/sync", requireAuth, async (req: AuthRequest, res, next) =
   }
 })
 
+// 6. Re-classify Single Feedback
+router.post("/feedback/reclassify", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const workspaceId = req.user!.workspaceId
+    const { feedbackId } = req.body
+
+    if (!feedbackId) {
+      return res.status(400).json({ error: "feedbackId is required" })
+    }
+
+    const feedbackItem = await prisma.feedback.findFirst({
+      where: { id: feedbackId, workspaceId }
+    })
+
+    if (!feedbackItem) {
+      return res.status(404).json({ error: "Feedback item not found" })
+    }
+
+    const existingThemes = await prisma.theme.findMany({
+      where: { workspaceId },
+      select: { name: true }
+    })
+    const themeNames = existingThemes.map(t => t.name)
+
+    const { classifyFeedback } = await import("../lib/ai.js")
+    const aiResult = await classifyFeedback(feedbackItem.content, themeNames)
+
+    const updated = await prisma.feedback.update({
+      where: { id: feedbackId },
+      data: {
+        category: aiResult.category,
+        sentiment: aiResult.sentiment,
+        sentimentScore: aiResult.sentimentScore,
+        featureArea: aiResult.featureArea
+      }
+    })
+
+    return res.status(200).json({ success: true, feedback: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
 export default router
+
