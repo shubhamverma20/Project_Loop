@@ -11,7 +11,9 @@ import {
   Sparkles,
   Bot,
   Database,
-  Loader2
+  Loader2,
+  Menu,
+  X,
 } from "lucide-react"
 import { api } from "@/lib/api-client"
 
@@ -23,6 +25,7 @@ export default function DashboardLayout({
   const pathname = usePathname()
   const router = useRouter()
   const [checkingAuth, setCheckingAuth] = useState(true)
+  const [isMobileOpen, setIsMobileOpen] = useState(false)
 
   useEffect(() => {
     async function checkAuth() {
@@ -45,6 +48,33 @@ export default function DashboardLayout({
     }
     checkAuth()
   }, [router])
+
+  // ESC key listener to close mobile sidebar drawer
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setIsMobileOpen(false)
+      }
+    }
+    if (isMobileOpen) {
+      window.addEventListener("keydown", handleKeyDown)
+    }
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown)
+    }
+  }, [isMobileOpen])
+
+  // Lock background scroll when mobile sidebar drawer is open
+  useEffect(() => {
+    if (isMobileOpen) {
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = ""
+    }
+    return () => {
+      document.body.style.overflow = ""
+    }
+  }, [isMobileOpen])
 
   const handleSignOut = async () => {
     try {
@@ -78,23 +108,49 @@ export default function DashboardLayout({
   }
 
   return (
-    <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
-      {/* Sidebar */}
-      <div className="w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col">
-        <div className="h-16 flex items-center px-6 border-b border-zinc-200 dark:border-zinc-800">
-          <Link href="/dashboard" className="flex items-center space-x-2 font-bold text-xl text-zinc-900 dark:text-white">
+    <div className="flex flex-col md:flex-row h-screen bg-zinc-50 dark:bg-zinc-950 overflow-x-hidden relative">
+      {/* Mobile Backdrop */}
+      {isMobileOpen && (
+        <div
+          className="fixed inset-0 bg-black/50 z-40 md:hidden transition-opacity duration-300"
+          onClick={() => setIsMobileOpen(false)}
+          aria-hidden="true"
+        />
+      )}
+
+      {/* Sidebar Drawer */}
+      <aside
+        id="mobile-sidebar"
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-zinc-900 border-r border-zinc-200 dark:border-zinc-800 flex flex-col transition-transform duration-300 ease-in-out md:static md:translate-x-0 ${
+          isMobileOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <div className="h-16 flex items-center justify-between px-6 border-b border-zinc-200 dark:border-zinc-800">
+          <Link
+            href="/dashboard"
+            onClick={() => setIsMobileOpen(false)}
+            className="flex items-center space-x-2 font-bold text-xl text-zinc-900 dark:text-white"
+          >
             <Sparkles className="w-6 h-6 text-blue-500" />
             <span>Project LOOP</span>
           </Link>
+          <button
+            onClick={() => setIsMobileOpen(false)}
+            className="md:hidden p-1.5 text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label="Close menu"
+          >
+            <X className="w-5 h-5" />
+          </button>
         </div>
 
-        <nav className="flex-1 px-4 py-6 space-y-1">
+        <nav className="flex-1 px-4 py-6 space-y-1 overflow-y-auto">
           {navigation.map((item) => {
             const isActive = pathname === item.href || (item.href === "/explorer" && pathname === "/feedback")
             return (
               <Link
                 key={item.name}
                 href={item.href}
+                onClick={() => setIsMobileOpen(false)}
                 className={`flex items-center space-x-3 px-3 py-2.5 rounded-lg transition-colors ${
                   isActive
                     ? "bg-blue-50 dark:bg-blue-500/10 text-blue-600 dark:text-blue-400 font-medium"
@@ -117,14 +173,35 @@ export default function DashboardLayout({
             <span>Log out</span>
           </button>
         </div>
-      </div>
+      </aside>
 
       {/* Main Content Area */}
-      <div className="flex-1 overflow-auto">
-        <div className="p-8">
+      <div className="flex-1 overflow-auto flex flex-col min-w-0">
+        {/* Mobile Header Bar */}
+        <header className="h-16 flex items-center justify-between px-4 bg-white dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800 md:hidden shrink-0">
+          <Link
+            href="/dashboard"
+            className="flex items-center space-x-2 font-bold text-xl text-zinc-900 dark:text-white"
+          >
+            <Sparkles className="w-6 h-6 text-blue-500" />
+            <span>Project LOOP</span>
+          </Link>
+          <button
+            onClick={() => setIsMobileOpen((prev) => !prev)}
+            className="p-2 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-100 dark:hover:bg-zinc-800 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            aria-label={isMobileOpen ? "Close menu" : "Open menu"}
+            aria-expanded={isMobileOpen}
+            aria-controls="mobile-sidebar"
+          >
+            {isMobileOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
+          </button>
+        </header>
+
+        <div className="p-4 sm:p-6 md:p-8 flex-1">
           {children}
         </div>
       </div>
     </div>
   )
 }
+
