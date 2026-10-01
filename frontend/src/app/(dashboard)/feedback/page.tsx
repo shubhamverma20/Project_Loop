@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { api } from "@/lib/api-client"
 import { AdvancedFilters } from "@/components/AdvancedFilters"
 import { LiveFeedbackBanner } from "@/components/LiveFeedbackBanner"
+import { AskLoopCard } from "@/components/AskLoopCard"
 import { StatusDropdown } from "@/components/StatusDropdown"
 import { ReclassifyButton } from "@/components/ReclassifyButton"
 import { Pagination } from "@/components/Pagination"
@@ -79,75 +80,77 @@ function FeedbackExplorerView() {
   }
 
   return (
-    <div className="space-y-6 max-w-6xl mx-auto h-full flex flex-col">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6 max-w-6xl mx-auto h-full flex flex-col min-w-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Feedback Explorer</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Feedback Explorer</h1>
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Search and analyze feedback semantically.
           </p>
         </div>
         <LiveFeedbackBanner />
       </div>
 
+      <AskLoopCard />
+
       <AdvancedFilters />
 
       {error ? (
-        <div className="p-4 bg-red-50 text-red-600 rounded-lg border border-red-200">
+        <div className="p-4 bg-red-50 text-red-600 rounded-lg border border-red-200 text-sm">
           {error}
         </div>
       ) : (
-        <div className="flex flex-col flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm overflow-hidden min-h-[400px]">
+        <div className="flex flex-col flex-1 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl shadow-sm overflow-hidden min-h-[400px] w-full min-w-0">
           {loading ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 text-zinc-500">
               <Loader2 className="w-8 h-8 text-blue-500 animate-spin mb-2" />
               <p className="text-sm font-medium">Fetching feedback explorer entries...</p>
             </div>
           ) : (
-            <div className="flex-1 overflow-auto">
-              <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800">
+            <div className="flex-1 overflow-x-auto w-full min-w-0">
+              <table className="min-w-full divide-y divide-zinc-200 dark:divide-zinc-800 text-left">
                 <thead className="bg-zinc-50 dark:bg-zinc-900 sticky top-0 z-10">
                   <tr>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Content</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Channel</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Sentiment</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
-                    <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Content</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Category</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Channel</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Sentiment</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Date</th>
+                    <th scope="col" className="px-4 sm:px-6 py-3 text-xs font-medium text-zinc-500 uppercase tracking-wider">Actions</th>
                   </tr>
                 </thead>
                 <tbody className="bg-white dark:bg-zinc-900 divide-y divide-zinc-200 dark:divide-zinc-800">
                   {feedback?.map((item) => (
                     <tr key={item.id} className="hover:bg-zinc-50 dark:hover:bg-zinc-800/50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <p className="text-sm text-zinc-900 dark:text-zinc-100 max-w-md line-clamp-3" title={item.content}>
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4">
+                        <p className="text-xs sm:text-sm text-zinc-900 dark:text-zinc-100 max-w-xs sm:max-w-md line-clamp-3" title={item.content}>
                           {item.content}
                         </p>
                         {item.customerLabel && (
-                          <p className="text-xs text-zinc-500 mt-2">Source: {item.customerLabel}</p>
+                          <p className="text-[11px] text-zinc-500 mt-1">Source: {item.customerLabel}</p>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4 whitespace-nowrap">
                         {item.category && (
-                          <div className="flex items-center space-x-1 text-sm text-blue-600 bg-blue-50 px-2 py-1 rounded-md max-w-max">
+                          <div className="flex items-center space-x-1 text-xs text-blue-600 bg-blue-50 dark:bg-blue-500/10 dark:text-blue-400 px-2 py-0.5 rounded-md max-w-max">
                             <Tag className="w-3 h-3" />
                             <span>{item.category}</span>
                           </div>
                         )}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
                         {item.channel}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4 whitespace-nowrap">
                         {renderSentimentBadge(item.sentiment as string | null)}
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm text-zinc-500 dark:text-zinc-400">
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4 whitespace-nowrap text-xs sm:text-sm text-zinc-500 dark:text-zinc-400">
                         <div className="flex items-center space-x-1">
                           <Clock className="w-3 h-3" />
                           <span>{new Date(item.createdAt).toLocaleDateString()}</span>
                         </div>
                       </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
+                      <td className="px-4 sm:px-6 py-3.5 sm:py-4 whitespace-nowrap">
                         <div className="flex items-center space-x-2">
                           <StatusDropdown id={item.id} currentStatus={item.status} />
                           <ReclassifyButton id={item.id} />

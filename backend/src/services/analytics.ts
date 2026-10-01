@@ -99,31 +99,70 @@ export async function getDashboardStats(
     const categoryData = Object.entries(categoryCount).map(([name, value]) => ({ name, value }))
     const channelData = Object.entries(channelCount).map(([name, value]) => ({ name, value }))
 
-    const topThemes = await prisma.theme.findMany({
-      where: {
-        workspaceId,
-        feedbacks: {
-          some: {
-            feedback: { createdAt: { gte: startDate, lte: endDate } }
+    const periodDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
+    const prevStartDate = subDays(startDate, periodDays)
+
+    const [currentThemes, previousThemes] = await Promise.all([
+      prisma.theme.findMany({
+        where: {
+          workspaceId,
+          feedbacks: {
+            some: { feedback: { createdAt: { gte: startDate, lte: endDate } } }
+          }
+        },
+        select: {
+          id: true,
+          name: true,
+          _count: {
+            select: {
+              feedbacks: {
+                where: { feedback: { createdAt: { gte: startDate, lte: endDate } } }
+              }
+            }
+          }
+        },
+        orderBy: { feedbacks: { _count: 'desc' } },
+        take: 10
+      }),
+      prisma.theme.findMany({
+        where: {
+          workspaceId,
+          feedbacks: {
+            some: { feedback: { createdAt: { gte: prevStartDate, lt: startDate } } }
+          }
+        },
+        select: {
+          name: true,
+          _count: {
+            select: {
+              feedbacks: {
+                where: { feedback: { createdAt: { gte: prevStartDate, lt: startDate } } }
+              }
+            }
           }
         }
-      },
-      select: {
-        name: true,
-        _count: {
-          select: { feedbacks: true }
-        }
-      },
-      orderBy: {
-        feedbacks: { _count: 'desc' }
-      },
-      take: 5
+      })
+    ])
+
+    const prevCountMap = new Map<string, number>()
+    previousThemes.forEach(pt => prevCountMap.set(pt.name, pt._count.feedbacks))
+
+    const themeData = currentThemes.map(t => {
+      const currentCount = t._count.feedbacks
+      const prevCount = prevCountMap.get(t.name) || 0
+      const growth = prevCount === 0 ? (currentCount > 0 ? 100 : 0) : Math.round(((currentCount - prevCount) / prevCount) * 100)
+      const spiking = currentCount >= 2 && (prevCount === 0 || growth >= 30)
+
+      return {
+        theme: t.name,
+        count: currentCount,
+        prevCount,
+        growth,
+        spiking
+      }
     })
 
-    const themeData = topThemes.map(t => ({
-      theme: t.name,
-      count: t._count.feedbacks
-    }))
+    const spikingThemes = themeData.filter(t => t.spiking)
 
     return {
       error: null,
@@ -134,12 +173,14 @@ export async function getDashboardStats(
           positiveFeedbackCount,
           neutralFeedbackCount,
           negativeFeedbackCount,
-          newThisWeek
+          newThisWeek,
+          spikingThemeCount: spikingThemes.length
         },
         charts: {
           volumeData,
           sentimentData,
           themeData,
+          spikingThemes,
           categoryData,
           channelData
         }

@@ -84,44 +84,44 @@ function DashboardView() {
     <div className="space-y-6 max-w-6xl mx-auto">
       <LiveFeedbackBanner />
 
-      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between space-y-4 xl:space-y-0">
+      <div className="flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Analytics Dashboard</h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tracking-tight">Analytics Dashboard</h1>
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Monitor feedback trends, categories, and sentiment across your workspace.
           </p>
         </div>
 
-        <div className="flex flex-col sm:flex-row gap-3">
-          <form className="flex items-center space-x-2 bg-white dark:bg-zinc-900 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm" method="GET">
+        <div className="flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-3">
+          <form className="flex flex-wrap sm:flex-nowrap items-center gap-2 bg-white dark:bg-zinc-900 p-1.5 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm" method="GET">
             <input type="hidden" name="range" value="custom" />
-            <div className="flex items-center space-x-2 px-2">
-              <Calendar className="w-4 h-4 text-zinc-400" />
-              <input type="date" name="start" defaultValue={customStart} required className="text-sm border-none bg-transparent focus:ring-0 text-zinc-700 dark:text-zinc-300 w-32" />
-              <span className="text-zinc-400 text-sm">to</span>
-              <input type="date" name="end" defaultValue={customEnd} required className="text-sm border-none bg-transparent focus:ring-0 text-zinc-700 dark:text-zinc-300 w-32" />
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 px-2 w-full sm:w-auto">
+              <Calendar className="w-4 h-4 text-zinc-400 shrink-0" />
+              <input type="date" name="start" defaultValue={customStart} required className="text-xs sm:text-sm border-none bg-transparent focus:ring-0 text-zinc-700 dark:text-zinc-300 w-28 sm:w-32" />
+              <span className="text-zinc-400 text-xs sm:text-sm">to</span>
+              <input type="date" name="end" defaultValue={customEnd} required className="text-xs sm:text-sm border-none bg-transparent focus:ring-0 text-zinc-700 dark:text-zinc-300 w-28 sm:w-32" />
             </div>
-            <button type="submit" className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-medium rounded transition-colors">
+            <button type="submit" className="px-3 py-1 bg-zinc-100 dark:bg-zinc-800 hover:bg-zinc-200 dark:hover:bg-zinc-700 text-xs font-medium rounded transition-colors w-full sm:w-auto">
               Apply
             </button>
           </form>
 
-          <div className="flex items-center bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
+          <div className="flex items-center justify-center bg-zinc-100 dark:bg-zinc-900 p-1 rounded-lg border border-zinc-200 dark:border-zinc-800 shadow-sm">
             <Link 
               href="?range=7d" 
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${range === "7d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${range === "7d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
             >
               7 Days
             </Link>
             <Link 
               href="?range=30d" 
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${range === "30d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${range === "30d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
             >
               30 Days
             </Link>
             <Link 
               href="?range=90d" 
-              className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${range === "90d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
+              className={`px-3 py-1.5 text-xs sm:text-sm font-medium rounded-md transition-colors ${range === "90d" ? "bg-white dark:bg-zinc-800 text-zinc-900 dark:text-white shadow-sm" : "text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"}`}
             >
               90 Days
             </Link>
@@ -130,93 +130,93 @@ function DashboardView() {
       </div>
 
       {/* Top Stats */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400">
+            <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg text-blue-600 dark:text-blue-400 shrink-0">
               <Inbox className="w-5 h-5" />
             </div>
-            <h3 className="font-medium text-zinc-600 dark:text-zinc-400">Total Feedback</h3>
+            <h3 className="font-medium text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">Total Feedback</h3>
           </div>
-          <p className="text-3xl font-bold text-zinc-900 dark:text-white">
+          <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">
             {stats.totalFeedback.toLocaleString()}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg text-emerald-600 dark:text-emerald-400 shrink-0">
               <TrendingUp className="w-5 h-5" />
             </div>
-            <h3 className="font-medium text-zinc-600 dark:text-zinc-400">Positive Feedback</h3>
+            <h3 className="font-medium text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">Positive Feedback</h3>
           </div>
-          <p className="text-3xl font-bold text-zinc-900 dark:text-white">
+          <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">
             {stats.positiveFeedbackCount.toLocaleString()}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-lg text-rose-600 dark:text-rose-400">
+            <div className="p-2 bg-rose-100 dark:bg-rose-900/30 rounded-lg text-rose-600 dark:text-rose-400 shrink-0">
               <TrendingDown className="w-5 h-5" />
             </div>
-            <h3 className="font-medium text-zinc-600 dark:text-zinc-400">Negative Feedback</h3>
+            <h3 className="font-medium text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">Negative Feedback</h3>
           </div>
-          <p className="text-3xl font-bold text-zinc-900 dark:text-white">
+          <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">
             {stats.negativeFeedbackCount.toLocaleString()}
           </p>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400">
+            <div className="p-2 bg-zinc-100 dark:bg-zinc-800 rounded-lg text-zinc-600 dark:text-zinc-400 shrink-0">
               <BarChart3 className="w-5 h-5" />
             </div>
-            <h3 className="font-medium text-zinc-600 dark:text-zinc-400">New This Week</h3>
+            <h3 className="font-medium text-xs sm:text-sm text-zinc-600 dark:text-zinc-400">New This Week</h3>
           </div>
-          <p className="text-3xl font-bold text-zinc-900 dark:text-white">
+          <p className="text-2xl sm:text-3xl font-bold text-zinc-900 dark:text-white">
             +{stats.newThisWeek.toLocaleString()}
           </p>
         </div>
       </div>
 
       {/* Main Volume Chart */}
-      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
-        <div className="flex items-center space-x-2 mb-6">
-          <BarChart3 className="w-5 h-5 text-zinc-400" />
-          <h2 className="font-semibold text-zinc-900 dark:text-white">Feedback Volume Trends</h2>
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm min-w-0">
+        <div className="flex items-center space-x-2 mb-4 sm:mb-6">
+          <BarChart3 className="w-5 h-5 text-zinc-400 shrink-0" />
+          <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-white">Feedback Volume Trends</h2>
         </div>
-        <div className="h-[300px] w-full">
+        <div className="h-[260px] sm:h-[300px] w-full min-w-0">
           <VolumeChart data={charts.volumeData} />
         </div>
       </div>
 
       {/* Grid Charts */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex flex-col">
-          <h2 className="font-semibold text-zinc-900 dark:text-white mb-6">Category Distribution</h2>
-          <div className="h-[250px] w-full flex-1">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6 min-w-0">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm flex flex-col min-w-0">
+          <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-white mb-4 sm:mb-6">Category Distribution</h2>
+          <div className="h-[220px] sm:h-[250px] w-full min-w-0 flex-1">
             <CategoryChart data={charts.categoryData} />
           </div>
         </div>
         
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm flex flex-col">
-          <h2 className="font-semibold text-zinc-900 dark:text-white mb-6">Source Channels</h2>
-          <div className="h-[250px] w-full flex-1">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm flex flex-col min-w-0">
+          <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-white mb-4 sm:mb-6">Source Channels</h2>
+          <div className="h-[220px] sm:h-[250px] w-full min-w-0 flex-1">
             <SourceChart data={charts.channelData} />
           </div>
         </div>
 
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
-          <h2 className="font-semibold text-zinc-900 dark:text-white mb-6">Sentiment Breakdown</h2>
-          <div className="h-[250px] w-full">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm min-w-0">
+          <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-white mb-4 sm:mb-6">Sentiment Breakdown</h2>
+          <div className="h-[220px] sm:h-[250px] w-full min-w-0">
             <SentimentChart data={charts.sentimentData} />
           </div>
         </div>
         
-        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-6 shadow-sm">
-          <h2 className="font-semibold text-zinc-900 dark:text-white mb-6">Top Themes (Auto-Classified)</h2>
-          <div className="h-[250px] w-full">
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-4 sm:p-6 shadow-sm min-w-0">
+          <h2 className="font-semibold text-sm sm:text-base text-zinc-900 dark:text-white mb-4 sm:mb-6">Top Themes (Auto-Classified)</h2>
+          <div className="h-[220px] sm:h-[250px] w-full min-w-0">
             <ThemesChart data={charts.themeData} />
           </div>
         </div>

@@ -1,7 +1,4 @@
-const defaultApiUrl = process.env.NODE_ENV === "production"
-  ? "https://project-loop-llid.onrender.com"
-  : "http://localhost:5000"
-
+const defaultApiUrl = "http://localhost:5000"
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
 
 export async function apiRequest<T = any>(

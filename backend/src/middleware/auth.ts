@@ -2,6 +2,8 @@ import { Request, Response, NextFunction } from "express"
 import jwt from "jsonwebtoken"
 import { prisma } from "../lib/prisma.js"
 
+import { getJwtSecret } from "../lib/env.js"
+
 export interface AuthenticatedUser {
   id: string
   email: string
@@ -26,7 +28,7 @@ export async function requireAuth(req: AuthRequest, res: Response, next: NextFun
       return res.status(401).json({ error: "Unauthorized: Session or token missing" })
     }
 
-    const secret = process.env.AUTH_SECRET || "default_dev_secret_key_32_chars_long"
+    const secret = getJwtSecret()
     const decoded = jwt.verify(token, secret) as AuthenticatedUser
 
     const user = await prisma.user.findUnique({

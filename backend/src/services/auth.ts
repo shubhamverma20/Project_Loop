@@ -16,8 +16,10 @@ const loginSchema = z.object({
   password: z.string().min(1, "Password is required")
 })
 
+import { getJwtSecret } from "../lib/env.js"
+
 export function generateToken(user: { id: string; email: string; workspaceId: string; role: string }) {
-  const secret = process.env.AUTH_SECRET || "default_dev_secret_key_32_chars_long"
+  const secret = getJwtSecret()
   return jwt.sign(
     {
       id: user.id,

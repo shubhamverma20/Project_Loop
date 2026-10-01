@@ -4,6 +4,14 @@ import { GoogleGenAI, Type } from "@google/genai"
 import { DateRange } from "./analytics.js"
 
 export interface InsightReport {
+  metrics: {
+    totalFeedback: number
+    positive: number
+    neutral: number
+    negative: number
+    priorTotalFeedback: number
+    sentimentShiftPercentage: number
+  }
   executiveSummary: string
   keyTrends: Array<{
     title: string
@@ -15,6 +23,7 @@ export interface InsightReport {
     frequency: number
     suggestedAction: string
   }>
+  notableCustomerQuotes: string[]
   recommendedActions: Array<{
     action: string
     priority: "HIGH" | "MEDIUM" | "LOW"
@@ -77,33 +86,68 @@ export async function generateInsightsReport(
       }
     }
 
-    if (!process.env.GEMINI_API_KEY) {
-      return { error: "Gemini API key is not configured.", data: null }
+    const rawApiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "")
+    if (!rawApiKey || rawApiKey.startsWith("your_")) {
+      return { error: "Gemini API key is not configured. Please set GEMINI_API_KEY in backend/.env.", data: null }
     }
 
-    const feedbackList = await prisma.feedback.findMany({
-      where: {
-        workspaceId,
-        createdAt: { gte: startDate, lte: endDate }
-      },
-      select: {
-        content: true,
-        sentiment: true,
-        category: true,
-        normalizedContent: true
-      },
-      orderBy: { createdAt: "desc" },
-      take: 200
-    })
+    // 1. CALCULATE REAL STATISTICS IN APPLICATION CODE
+    const periodDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
+    const prevStartDate = subDays(startDate, periodDays)
 
-    if (feedbackList.length === 0) {
+    const [currentFeedbackList, priorTotalFeedback, priorNegativeCount] = await Promise.all([
+      prisma.feedback.findMany({
+        where: { workspaceId, createdAt: { gte: startDate, lte: endDate } },
+        select: { id: true, content: true, sentiment: true, category: true, normalizedContent: true, createdAt: true },
+        orderBy: { createdAt: "desc" }
+      }),
+      prisma.feedback.count({
+        where: { workspaceId, createdAt: { gte: prevStartDate, lt: startDate } }
+      }),
+      prisma.feedback.count({
+        where: { workspaceId, createdAt: { gte: prevStartDate, lt: startDate }, sentiment: "NEG" }
+      })
+    ])
+
+    if (currentFeedbackList.length === 0) {
       return { error: "No feedback available for this date range. Submit, upload, or sync feedback first.", data: null }
     }
 
+    const totalFeedback = currentFeedbackList.length
+    let positiveCount = 0
+    let neutralCount = 0
+    let negativeCount = 0
+
+    const notableQuotes: string[] = []
+
+    currentFeedbackList.forEach(fb => {
+      if (fb.sentiment === "POS") positiveCount++
+      else if (fb.sentiment === "NEG") negativeCount++
+      else neutralCount++
+
+      if (notableQuotes.length < 5 && fb.content.length > 20) {
+        notableQuotes.push(fb.content)
+      }
+    })
+
+    const currNegPct = totalFeedback > 0 ? (negativeCount / totalFeedback) * 100 : 0
+    const prevNegPct = priorTotalFeedback > 0 ? (priorNegativeCount / priorTotalFeedback) * 100 : 0
+    const sentimentShiftPercentage = Math.round((currNegPct - prevNegPct) * 10) / 10
+
+    const calculatedStats = {
+      totalFeedback,
+      positive: positiveCount,
+      neutral: neutralCount,
+      negative: negativeCount,
+      priorTotalFeedback,
+      sentimentShiftPercentage
+    }
+
+    // 2. PREPARE GROUNDED CONTEXT FOR GEMINI NARRATIVE GENERATION
     const uniqueFeedbackSet = new Set<string>()
     const sampledFeedback: Array<{ content: string; sentiment: string; category: string }> = []
 
-    for (const fb of feedbackList) {
+    for (const fb of currentFeedbackList) {
       const normKey = (fb.normalizedContent || fb.content).toLowerCase().trim()
       if (!uniqueFeedbackSet.has(normKey)) {
         uniqueFeedbackSet.add(normKey)
@@ -117,10 +161,10 @@ export async function generateInsightsReport(
       }
     }
 
-    const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY })
+    const ai = new GoogleGenAI({ apiKey: rawApiKey })
 
-    const systemPrompt = `You are an elite Chief Product Officer and AI Data Analyst.
-Analyze customer feedback items for a SaaS product and generate an executive report.
+    const systemPrompt = `You are an elite Chief Product Officer and Voice-of-Customer (VoC) Intelligence AI Analyst.
+Synthesize the provided CALCULATED REAL STATISTICS and customer feedback samples to compose a Voice-of-Customer Executive Report.
 Return a raw JSON object ONLY with no markdown wrappers.`
 
     const responseSchema = {
@@ -151,6 +195,7 @@ Return a raw JSON object ONLY with no markdown wrappers.`
             required: ["issue", "frequency", "suggestedAction"]
           }
         },
+        notableCustomerQuotes: { type: Type.ARRAY, items: { type: Type.STRING } },
         recommendedActions: {
           type: Type.ARRAY,
           items: {
@@ -173,19 +218,56 @@ Return a raw JSON object ONLY with no markdown wrappers.`
           required: ["overallMood", "positiveDrivers", "negativeDrivers"]
         }
       },
-      required: ["executiveSummary", "keyTrends", "topCustomerPains", "recommendedActions", "sentimentAnalysis"]
+      required: ["executiveSummary", "keyTrends", "topCustomerPains", "notableCustomerQuotes", "recommendedActions", "sentimentAnalysis"]
     }
 
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: `Feedback Sample Data (${sampledFeedback.length} items):\n${JSON.stringify(sampledFeedback, null, 2)}`,
-      config: {
-        systemInstruction: systemPrompt,
-        temperature: 0.2,
-        responseMimeType: "application/json",
-        responseSchema: responseSchema
+    const promptContext = `
+CALCULATED REAL APPLICATION STATS:
+${JSON.stringify(calculatedStats, null, 2)}
+
+REPRESENTATIVE CUSTOMER QUOTES:
+${JSON.stringify(notableQuotes, null, 2)}
+
+FEEDBACK SAMPLES (${sampledFeedback.length} items):
+${JSON.stringify(sampledFeedback, null, 2)}
+`
+
+    const primaryModel = process.env.GEMINI_MODEL || "gemini-3.6-flash"
+    const fallbackModel = "gemini-3.5-flash"
+    const modelsToTry = [primaryModel, fallbackModel, "gemini-3.5-flash-lite"]
+
+    let response: any = null
+    let lastError: unknown = null
+
+    for (const modelName of modelsToTry) {
+      try {
+        response = await ai.models.generateContent({
+          model: modelName,
+          contents: promptContext,
+          config: {
+            systemInstruction: systemPrompt,
+            temperature: 0.2,
+            responseMimeType: "application/json",
+            responseSchema: responseSchema
+          }
+        })
+        if (response?.text) break
+      } catch (err: any) {
+        lastError = err
+        const msg = String(err?.message || err || "")
+        if (msg.includes("API key") || msg.includes("API_KEY") || msg.includes("401") || msg.includes("403") || msg.includes("UNAUTHENTICATED") || msg.includes("invalid")) {
+          return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key. Please generate a valid key starting with 'AIzaSy...' from https://aistudio.google.com and set GEMINI_API_KEY in backend/.env.", data: null }
+        }
+        if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
+          return { error: "Gemini API Rate Limit / Quota Exceeded. Please try again later.", data: null }
+        }
       }
-    })
+    }
+
+    if (!response || !response.text) {
+      const errMessage = lastError instanceof Error ? lastError.message : String(lastError)
+      return { error: `Gemini AI Report Generation Failed: ${errMessage}`, data: null }
+    }
 
     let textToParse = (response.text || "").trim()
     if (textToParse.startsWith("```json")) {
@@ -194,11 +276,21 @@ Return a raw JSON object ONLY with no markdown wrappers.`
       textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
     }
 
-    const reportData: InsightReport = JSON.parse(textToParse)
+    const parsedNarrative = JSON.parse(textToParse)
+
+    const reportData: InsightReport = {
+      metrics: calculatedStats,
+      executiveSummary: parsedNarrative.executiveSummary || "Voice-of-Customer report generated.",
+      keyTrends: parsedNarrative.keyTrends || [],
+      topCustomerPains: parsedNarrative.topCustomerPains || [],
+      notableCustomerQuotes: parsedNarrative.notableCustomerQuotes || notableQuotes,
+      recommendedActions: parsedNarrative.recommendedActions || [],
+      sentimentAnalysis: parsedNarrative.sentimentAnalysis || { overallMood: "Neutral", positiveDrivers: [], negativeDrivers: [] }
+    }
 
     const savedReport = await prisma.report.create({
       data: {
-        title: `AI Insights Report (${range})`,
+        title: `Voice of Customer (VoC) Report (${range})`,
         periodStart: startDate,
         periodEnd: endDate,
         contentJson: reportData as any,
@@ -214,14 +306,14 @@ Return a raw JSON object ONLY with no markdown wrappers.`
       }
     }
   } catch (err: unknown) {
-    console.error("Generate Insights Report Error:", err)
+    console.error("Generate VoC Report Error:", err)
     const errMessage = err instanceof Error ? err.message : String(err)
     if (errMessage.includes("API key") || errMessage.includes("401") || errMessage.includes("403") || errMessage.includes("UNAUTHENTICATED")) {
-      return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key", data: null }
+      return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key. Please generate a valid key starting with 'AIzaSy...' from https://aistudio.google.com and set GEMINI_API_KEY in backend/.env.", data: null }
     }
     if (errMessage.includes("429") || errMessage.includes("RESOURCE_EXHAUSTED") || errMessage.includes("quota")) {
       return { error: "Gemini API Rate Limit / Quota Exceeded. Please try again later.", data: null }
     }
-    return { error: errMessage || "Failed to generate AI insights report", data: null }
+    return { error: errMessage || "Failed to generate Voice of Customer report", data: null }
   }
 }

@@ -52,11 +52,11 @@ export function AdvancedFilters() {
         />
       </div>
       
-      <div className="flex flex-wrap gap-3">
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
         <select
           value={searchParams.get("category") || ""}
           onChange={(e) => handleFilterChange("category", e.target.value)}
-          className="bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-xs sm:text-sm px-3 py-2.5 sm:py-1.5 focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Categories</option>
           <option value="Bug">Bug</option>
@@ -70,7 +70,7 @@ export function AdvancedFilters() {
         <select
           value={searchParams.get("sentiment") || ""}
           onChange={(e) => handleFilterChange("sentiment", e.target.value)}
-          className="bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-xs sm:text-sm px-3 py-2.5 sm:py-1.5 focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Sentiments</option>
           <option value="POS">Positive</option>
@@ -81,7 +81,7 @@ export function AdvancedFilters() {
         <select
           value={searchParams.get("channel") || ""}
           onChange={(e) => handleFilterChange("channel", e.target.value)}
-          className="bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-sm px-3 py-1.5 focus:ring-2 focus:ring-blue-500"
+          className="w-full bg-zinc-50 dark:bg-zinc-800 border-none rounded-lg text-xs sm:text-sm px-3 py-2.5 sm:py-1.5 focus:ring-2 focus:ring-blue-500"
         >
           <option value="">All Channels</option>
           <option value="Website">Website</option>

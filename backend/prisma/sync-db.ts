@@ -163,6 +163,30 @@ async function syncDb() {
       );
     `)
 
+    // 9. Enable pgvector extension & Embedding table (Ensure vector(768))
+    await client.query(`
+      CREATE EXTENSION IF NOT EXISTS vector;
+      CREATE TABLE IF NOT EXISTS "Embedding" (
+        "id" TEXT PRIMARY KEY,
+        "feedbackId" TEXT NOT NULL REFERENCES "Feedback"("id") ON DELETE CASCADE,
+        "vector" vector(768)
+      );
+
+      DO $$
+      BEGIN
+        IF EXISTS (
+          SELECT 1 
+          FROM pg_attribute 
+          WHERE attrelid = '"Embedding"'::regclass 
+            AND attname = 'vector' 
+            AND atttypmod != 768
+        ) THEN
+          TRUNCATE TABLE "Embedding";
+          ALTER TABLE "Embedding" ALTER COLUMN "vector" TYPE vector(768);
+        END IF;
+      END $$;
+    `)
+
     console.log("✅ Neon PostgreSQL database schema successfully synchronized!")
   } catch (err) {
     console.error("❌ Database sync error:", err)

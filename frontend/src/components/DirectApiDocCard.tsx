@@ -67,16 +67,16 @@ export function DirectApiDocCard() {
         <label className="block text-xs font-semibold text-zinc-700 dark:text-zinc-300">
           Endpoint URL
         </label>
-        <div className="flex items-center space-x-2">
-          <span className="px-2.5 py-1.5 text-xs font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-md">
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+          <span className="self-start sm:self-auto px-2.5 py-1.5 text-xs font-mono font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 rounded-md shrink-0">
             POST
           </span>
-          <code className="flex-1 p-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md font-mono text-xs text-zinc-900 dark:text-zinc-100 select-all overflow-x-auto">
+          <code className="flex-1 p-2 bg-zinc-50 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md font-mono text-xs text-zinc-900 dark:text-zinc-100 select-all overflow-x-auto break-all">
             {endpointUrl}
           </code>
           <button
             onClick={copyUrl}
-            className="p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md transition-colors flex items-center space-x-1 text-xs"
+            className="p-2 text-zinc-600 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white bg-zinc-100 dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-md transition-colors flex items-center justify-center space-x-1 text-xs shrink-0"
             title="Copy URL"
           >
             {copiedUrl ? <Check className="w-4 h-4 text-emerald-500" /> : <Copy className="w-4 h-4" />}

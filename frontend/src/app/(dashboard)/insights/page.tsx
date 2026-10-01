@@ -154,17 +154,17 @@ export default function InsightsPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between space-y-4 sm:space-y-0">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
-            AI Insights <Sparkles className="w-5 h-5 text-blue-500" />
+          <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 dark:text-white tracking-tight flex items-center gap-2">
+            AI Insights <Sparkles className="w-5 h-5 text-blue-500 shrink-0" />
           </h1>
-          <p className="text-sm text-zinc-500 dark:text-zinc-400 mt-1">
+          <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
             Gemini AI analysis of customer feedback. Generates themes, risks, and recommendations.
           </p>
         </div>
 
-        <div className="flex items-center space-x-3">
+        <div className="flex flex-wrap items-center gap-3">
           {reports.length > 0 && (
             <button
               onClick={handleClearAllReports}

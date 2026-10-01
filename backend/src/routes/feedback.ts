@@ -2,10 +2,11 @@ import { Router } from "express"
 import crypto from "crypto"
 import jwt from "jsonwebtoken"
 import { prisma } from "../lib/prisma.js"
-import { checkRateLimit } from "../lib/rate-limit.js"
+import { checkRateLimit, checkRateLimitAsync } from "../lib/rate-limit.js"
 import { processSingleFeedback, simulateChannelSync } from "../services/ingestion.js"
 import { feedbackEvents, FeedbackEventPayload } from "../lib/events.js"
-import { requireAuth, AuthRequest } from "../middleware/auth.js"
+import { requireAuth, requireRole, AuthRequest } from "../middleware/auth.js"
+import { getJwtSecret } from "../lib/env.js"
 import { z } from "zod"
 
 const router = Router()
@@ -23,7 +24,7 @@ router.post("/feedback", async (req, res, next) => {
     const clientIp = req.ip || req.headers["x-forwarded-for"] || "unknown_ip"
     const ipKey = Array.isArray(clientIp) ? clientIp[0] : clientIp
 
-    const preAuthLimit = checkRateLimit("unauth_api_" + ipKey, 20, 60 * 1000)
+    const preAuthLimit = await checkRateLimitAsync("unauth_api_" + ipKey, 20, 60 * 1000)
     if (!preAuthLimit.success) {
       return res.status(429).json({ error: "Too many authentication attempts. Please try again later." })
     }
@@ -57,7 +58,7 @@ router.post("/feedback", async (req, res, next) => {
       const token = bearerToken || cookieToken || (req.query.token as string | undefined)
       if (token) {
         try {
-          const secret = process.env.AUTH_SECRET || "default_dev_secret_key_32_chars_long"
+          const secret = getJwtSecret()
           const decoded = jwt.verify(token, secret) as { id?: string; workspaceId?: string }
           if (decoded?.id) {
             const user = await prisma.user.findUnique({
@@ -80,7 +81,7 @@ router.post("/feedback", async (req, res, next) => {
       return res.status(401).json({ error: "Unauthorized: Invalid or missing API key / authorization token" })
     }
 
-    const rateLimit = checkRateLimit("ws_api_" + workspaceId, 60, 60 * 1000)
+    const rateLimit = await checkRateLimitAsync("ws_api_" + workspaceId, 60, 60 * 1000)
     if (!rateLimit.success) {
       return res.status(429).json({ error: "Rate limit exceeded. Please try again later." })
     }
@@ -174,10 +175,47 @@ router.get("/feedback/explorer", requireAuth, async (req: AuthRequest, res, next
     const category = req.query.category as string | undefined
     const sentiment = req.query.sentiment as string | undefined
     const channel = req.query.channel as string | undefined
+    const searchMode = req.query.searchMode as string | undefined
     const page = parseInt((req.query.page as string) || "1", 10)
     const limit = parseInt((req.query.limit as string) || "10", 10)
 
     const skip = (page - 1) * limit
+
+    if (searchMode === "semantic" && query && query.trim()) {
+      const { generateEmbedding } = await import("../lib/embeddings.js")
+      const queryVector = await generateEmbedding(query.trim())
+      const vectorStr = JSON.stringify(queryVector)
+
+      const rawResults: Array<any> = await prisma.$queryRaw`
+        SELECT 
+          f.id,
+          f.content,
+          f.category,
+          f.sentiment,
+          f."sentimentScore",
+          f.channel,
+          f."customerLabel",
+          f.status,
+          f."createdAt",
+          ROUND((1 - (e.vector <=> ${vectorStr}::vector))::numeric, 4) AS similarity
+        FROM "Feedback" f
+        JOIN "Embedding" e ON f.id = e."feedbackId"
+        WHERE f."workspaceId" = ${workspaceId}
+        ORDER BY e.vector <=> ${vectorStr}::vector ASC
+        LIMIT ${limit} OFFSET ${skip}
+      `
+
+      const countResult: Array<{ count: bigint }> = await prisma.$queryRaw`
+        SELECT COUNT(*) as count
+        FROM "Feedback" f
+        JOIN "Embedding" e ON f.id = e."feedbackId"
+        WHERE f."workspaceId" = ${workspaceId}
+      `
+      const total = Number(countResult[0]?.count || 0)
+
+      return res.status(200).json({ success: true, total, data: rawResults, page, limit, searchMode: "semantic" })
+    }
+
     const where: any = { workspaceId }
 
     if (query && query.trim()) {
@@ -202,14 +240,54 @@ router.get("/feedback/explorer", requireAuth, async (req: AuthRequest, res, next
       })
     ])
 
-    return res.status(200).json({ success: true, total, data, page, limit })
+    return res.status(200).json({ success: true, total, data, page, limit, searchMode: "keyword" })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 3b. Dedicated Semantic Vector Search Endpoint
+router.get("/feedback/semantic-search", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const workspaceId = req.user!.workspaceId
+    const query = req.query.query as string | undefined
+    const limit = parseInt((req.query.limit as string) || "10", 10)
+
+    if (!query || !query.trim()) {
+      return res.status(400).json({ error: "Search query string is required for semantic vector search" })
+    }
+
+    const { generateEmbedding } = await import("../lib/embeddings.js")
+    const queryVector = await generateEmbedding(query.trim())
+    const vectorStr = JSON.stringify(queryVector)
+
+    const results: Array<any> = await prisma.$queryRaw`
+      SELECT 
+        f.id,
+        f.content,
+        f.category,
+        f.sentiment,
+        f."sentimentScore",
+        f.channel,
+        f."customerLabel",
+        f.status,
+        f."createdAt",
+        ROUND((1 - (e.vector <=> ${vectorStr}::vector))::numeric, 4) AS similarity
+      FROM "Feedback" f
+      JOIN "Embedding" e ON f.id = e."feedbackId"
+      WHERE f."workspaceId" = ${workspaceId}
+      ORDER BY e.vector <=> ${vectorStr}::vector ASC
+      LIMIT ${limit}
+    `
+
+    return res.status(200).json({ success: true, count: results.length, data: results })
   } catch (err) {
     next(err)
   }
 })
 
 // 4. Update Feedback Status
-router.post("/feedback/status", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/feedback/status", requireAuth, requireRole(["ADMIN", "ANALYST"]), async (req: AuthRequest, res, next) => {
   try {
     const workspaceId = req.user!.workspaceId
     const { feedbackId, status } = req.body
@@ -246,7 +324,7 @@ router.post("/feedback/sync", requireAuth, async (req: AuthRequest, res, next) =
 })
 
 // 6. Re-classify Single Feedback
-router.post("/feedback/reclassify", requireAuth, async (req: AuthRequest, res, next) => {
+router.post("/feedback/reclassify", requireAuth, requireRole(["ADMIN", "ANALYST"]), async (req: AuthRequest, res, next) => {
   try {
     const workspaceId = req.user!.workspaceId
     const { feedbackId } = req.body
@@ -283,6 +361,29 @@ router.post("/feedback/reclassify", requireAuth, async (req: AuthRequest, res, n
     })
 
     return res.status(200).json({ success: true, feedback: updated })
+  } catch (err) {
+    next(err)
+  }
+})
+
+// 7. Ask LOOP Grounded Q&A Endpoint
+router.post("/feedback/ask", requireAuth, async (req: AuthRequest, res, next) => {
+  try {
+    const workspaceId = req.user!.workspaceId
+    const { question, limit } = req.body
+
+    if (!question || typeof question !== "string") {
+      return res.status(400).json({ error: "question string is required" })
+    }
+
+    const { askLoopGroundedQa } = await import("../services/ask-loop.js")
+    const result = await askLoopGroundedQa(workspaceId, question, limit ? parseInt(String(limit), 10) : 8)
+
+    if (result.error) {
+      return res.status(400).json({ error: result.error })
+    }
+
+    return res.status(200).json(result)
   } catch (err) {
     next(err)
   }

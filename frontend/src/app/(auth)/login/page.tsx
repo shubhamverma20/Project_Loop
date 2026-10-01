@@ -67,10 +67,13 @@ export default function LoginPage() {
   }
 
   const initGoogleAuth = () => {
-    if (window.google?.accounts?.id) {
+    const clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1081076966578-lb2ajn8u1lq04rsdbkl8679vvtpucnnb.apps.googleusercontent.com"
+    if (window.google?.accounts?.id && clientId) {
       window.google.accounts.id.initialize({
-        client_id: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || "1081076966578-lb2ajn8u1lq04rsdbkl8679vvtpucnnb.apps.googleusercontent.com",
-        callback: handleGoogleResponse
+        client_id: clientId,
+        callback: handleGoogleResponse,
+        auto_select: false,
+        cancel_on_tap_outside: true
       })
       const btnContainer = document.getElementById("googleBtnDiv")
       if (btnContainer) {

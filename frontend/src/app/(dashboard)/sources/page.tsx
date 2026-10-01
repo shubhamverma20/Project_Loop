@@ -122,10 +122,10 @@ export default function SourcesPage() {
                   key={channel.id} 
                   className="p-4 bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-800 rounded-lg space-y-3"
                 >
-                  <div className="flex items-center justify-between">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                     <div>
-                      <div className="flex items-center space-x-2">
-                        <h4 className="font-medium text-zinc-900 dark:text-white text-sm">{channel.title}</h4>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-medium text-zinc-900 dark:text-white text-xs sm:text-sm">{channel.title}</h4>
                         <span className="px-2 py-0.5 text-[10px] font-medium bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300 rounded-full">
                           {channel.tag}
                         </span>
@@ -136,7 +136,7 @@ export default function SourcesPage() {
                     <button
                       onClick={() => handleSimulateSync(channel.id)}
                       disabled={loadingChannel !== null}
-                      className="flex items-center space-x-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 flex-shrink-0 ml-3"
+                      className="flex items-center justify-center space-x-2 px-3.5 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-md text-xs font-medium transition-colors disabled:opacity-50 shrink-0 w-full sm:w-auto"
                     >
                       {isLoading ? (
                         <>

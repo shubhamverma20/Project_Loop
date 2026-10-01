@@ -259,7 +259,7 @@ export function TeamMembersManager({ members, currentUserId, currentUserRole, on
           const isRemoving = removingId === member.id
 
           return (
-            <div key={member.id} className="py-3.5 flex items-center justify-between gap-4">
+            <div key={member.id} className="py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div className="flex items-center space-x-3 min-w-0">
                 <div className="w-8 h-8 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center font-semibold text-xs text-zinc-700 dark:text-zinc-200 flex-shrink-0">
                   {member.name ? member.name.charAt(0).toUpperCase() : member.email?.charAt(0).toUpperCase() || "?"}
@@ -279,7 +279,7 @@ export function TeamMembersManager({ members, currentUserId, currentUserRole, on
                 </div>
               </div>
 
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center justify-between sm:justify-end space-x-3 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-zinc-100 dark:border-zinc-800">
                 {isAdmin ? (
                   <div className="flex items-center space-x-1.5">
                     {getRoleIcon(member.role)}
