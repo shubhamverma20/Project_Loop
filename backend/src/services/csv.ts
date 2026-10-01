@@ -96,7 +96,7 @@ export interface CsvImportSummary {
 const MAX_ROWS_PER_REQUEST = 1000
 
 // Number of rows processed simultaneously
-const CONCURRENCY = 20
+const CONCURRENCY = 3
 
 export async function processCsvUpload(
   rows: Array<Record<string, any>>,

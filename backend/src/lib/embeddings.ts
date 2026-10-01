@@ -7,6 +7,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
   }
 
   try {
+    console.log("Embedding Provider: Gemini")
     const ai = new GoogleGenAI({ apiKey })
     const response = await ai.models.embedContent({
       model: "text-embedding-004",
@@ -18,7 +19,7 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       return values
     }
   } catch (error: any) {
-    console.error("Gemini Embedding API Error:", error?.message || error)
+    console.warn("Gemini embedding API failed. Using local fallback embedding.")
   }
 
   return generateFallbackEmbedding(text)

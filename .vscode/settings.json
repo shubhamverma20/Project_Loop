@@ -2,5 +2,11 @@
   "css.validate": false,
   "less.validate": false,
   "scss.validate": false,
-  "utCopilot.common.testFramework": "vitest"
+  "utCopilot.common.testFramework": "vitest",
+  "files.associations": {
+    "**/.next/trace": "plaintext"
+  },
+  "files.exclude": {
+    "**/.next/trace": true
+  }
 }
