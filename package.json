@@ -15,6 +15,7 @@
     "test": "npm test --prefix backend"
   },
   "devDependencies": {
+    "@playwright/test": "^1.63.0",
     "concurrently": "^10.0.5"
   }
 }
