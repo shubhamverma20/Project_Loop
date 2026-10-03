@@ -41,7 +41,8 @@ export async function generateInsightsReport(
   workspaceId: string,
   range: DateRange = "30d",
   customStart?: string,
-  customEnd?: string
+  customEnd?: string,
+  forceRefresh: boolean = false
 ) {
   let startDate: Date
   let endDate: Date
@@ -56,32 +57,34 @@ export async function generateInsightsReport(
   }
 
   try {
-    const existingReport = await prisma.report.findFirst({
-      where: {
-        workspaceId,
-        periodStart: startDate,
-        periodEnd: endDate,
-        createdAt: { gte: startOfDay(new Date()) }
-      },
-      orderBy: { createdAt: "desc" }
-    })
+    if (!forceRefresh) {
+      const existingReport = await prisma.report.findFirst({
+        where: {
+          workspaceId,
+          periodStart: startDate,
+          periodEnd: endDate,
+          createdAt: { gte: startOfDay(new Date()) }
+        },
+        orderBy: { createdAt: "desc" }
+      })
 
-    const latestFeedback = await prisma.feedback.findFirst({
-      where: {
-        workspaceId,
-        createdAt: { gte: startDate, lte: endDate }
-      },
-      orderBy: { createdAt: "desc" },
-      select: { createdAt: true }
-    })
+      const latestFeedback = await prisma.feedback.findFirst({
+        where: {
+          workspaceId,
+          createdAt: { gte: startDate, lte: endDate }
+        },
+        orderBy: { createdAt: "desc" },
+        select: { createdAt: true }
+      })
 
-    if (existingReport) {
-      if (!latestFeedback || latestFeedback.createdAt <= existingReport.createdAt) {
-        return { 
-          error: null, 
-          data: {
-            id: existingReport.id,
-            report: existingReport.contentJson as unknown as InsightReport
+      if (existingReport) {
+        if (!latestFeedback || latestFeedback.createdAt <= existingReport.createdAt) {
+          return { 
+            error: null, 
+            data: {
+              id: existingReport.id,
+              report: existingReport.contentJson as unknown as InsightReport
+            }
           }
         }
       }

@@ -28,7 +28,7 @@ export function getGroqApiKey(): string {
 
 export function getGeminiModel(): string {
   const model = (process.env.GEMINI_MODEL || "").trim().replace(/^["']|["']$/g, "")
-  return model || "gemini-2.5-flash"
+  return model || "gemini-3.8-flash"
 }
 
 export function getGroqModel(): string {
@@ -51,6 +51,23 @@ export function sanitizeError(error: unknown): string {
   msg = msg.replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "[REDACTED_KEY]")
   msg = msg.replace(/gsk_[A-Za-z0-9_-]{48}/g, "[REDACTED_KEY]")
   return msg
+}
+
+function extractErrorDetails(err: any): { status: string; code: string; message: string } {
+  if (!err) return { status: "500", code: "UNKNOWN", message: "Unknown error" }
+  let status = err.status || err.statusCode || err.response?.status
+  if (!status) {
+    const msg = String(err.message || err)
+    if (msg.includes("401")) status = "401"
+    else if (msg.includes("403")) status = "403"
+    else if (msg.includes("404")) status = "404"
+    else if (msg.includes("429")) status = "429"
+    else if (msg.includes("503")) status = "503"
+    else status = "500"
+  }
+  const code = err.code || err.errorCode || err.error?.code || "ERR"
+  const message = sanitizeError(err.message || err)
+  return { status: String(status), code: String(code), message }
 }
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -78,13 +95,14 @@ async function generateWithGemini<T = any>(
   console.log(`[AI] Gemini model: ${primaryModel}`)
 
   if (!apiKey) {
+    console.warn("[AI] Gemini failed: status=401, code=MISSING_KEY, message=GEMINI_API_KEY is not configured")
     throw new Error("GEMINI_API_KEY is not configured or invalid")
   }
 
   console.log("[AI] Gemini request started")
 
   const ai = new GoogleGenAI({ apiKey })
-  const fallbackModels = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
+  const fallbackModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
@@ -139,7 +157,9 @@ async function generateWithGemini<T = any>(
     }
   }
 
-  throw new Error(`Gemini generation failed: ${sanitizeError(lastErr)}`)
+  const details = extractErrorDetails(lastErr)
+  console.warn(`[AI] Gemini failed: status=${details.status}, code=${details.code}, message=${details.message}`)
+  throw new Error(`Gemini generation failed: ${details.message}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -158,6 +178,7 @@ async function generateWithGroq<T = any>(
   console.log(`[AI] Groq model: ${primaryModel}`)
 
   if (!apiKey) {
+    console.error("[AI] Groq failed: status=401, code=MISSING_KEY, message=GROQ_API_KEY is not configured")
     throw new Error("GROQ_API_KEY is not configured or invalid")
   }
 
@@ -233,7 +254,9 @@ async function generateWithGroq<T = any>(
     }
   }
 
-  throw new Error(`Groq generation failed: ${sanitizeError(lastErr)}`)
+  const details = extractErrorDetails(lastErr)
+  console.error(`[AI] Groq failed: status=${details.status}, code=${details.code}, message=${details.message}`)
+  throw new Error(`Groq generation failed: ${details.message}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -292,4 +315,17 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
   }
 
   throw new Error("AI service is temporarily unavailable. Please try again later.")
+}
+
+/**
+ * Diagnostic helper function to test Gemini directly with a tiny prompt.
+ */
+export async function testGeminiDiagnostic(): Promise<{ success: boolean; message: string }> {
+  try {
+    const res = await generateWithGemini({ prompt: "Reply with exactly: GEMINI_OK", temperature: 0.1 }, false)
+    return { success: true, message: res.text }
+  } catch (err: any) {
+    const details = extractErrorDetails(err)
+    return { success: false, message: `Status: ${details.status}, Code: ${details.code}, Msg: ${details.message}` }
+  }
 }

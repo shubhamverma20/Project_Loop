@@ -25,7 +25,7 @@ export async function getReportsList(workspaceId: string) {
 }
 
 export async function createNewReport(workspaceId: string, range: DateRange = "30d") {
-  return generateInsightsReport(workspaceId, range)
+  return generateInsightsReport(workspaceId, range, undefined, undefined, true)
 }
 
 export async function deleteReport(workspaceId: string, reportId: string) {
