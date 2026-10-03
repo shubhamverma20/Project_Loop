@@ -34,18 +34,15 @@ export function getGroqApiKey(): string {
 }
 
 export function getGeminiModel(): string {
-  return cleanEnv("GEMINI_MODEL") || "gemini-2.5-flash"
+  return cleanEnv("GEMINI_MODEL") || "gemini-3.8-flash"
 }
 
 export function getGroqModel(): string {
   return cleanEnv("GROQ_MODEL") || "openai/gpt-oss-20b"
 }
 
-// "AQ." keys are Vertex AI express-mode keys; "AIzaSy" keys are Gemini Developer API keys.
 function createGeminiClient(apiKey: string) {
-  return apiKey.startsWith("AQ.")
-    ? new GoogleGenAI({ vertexai: true, apiKey })
-    : new GoogleGenAI({ apiKey })
+  return new GoogleGenAI({ apiKey })
 }
 
 export function sanitizeError(error: unknown): string {
@@ -138,10 +135,10 @@ async function generateWithGemini<T = any>(
     throw new Error("GEMINI_API_KEY is not configured or invalid")
   }
 
-  console.log(`[AI] Gemini request started (mode: ${apiKey.startsWith("AQ.") ? "vertex-express" : "developer-api"})`)
+  console.log("[AI] Gemini request started")
 
   const ai = createGeminiClient(apiKey)
-  const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"]
+  const fallbackModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
