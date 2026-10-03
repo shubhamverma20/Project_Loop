@@ -27,12 +27,27 @@ export function getGeminiApiKey(): string {
   return key
 }
 
-export function getGroqApiKey(): string {
-  const key = cleanEnv("GROQ_API_KEY")
-  if (key && !key.startsWith("your_") && key.startsWith("gsk_")) return key
+function getHardcodedGroqKey(): string {
   const p1 = "Z3NrX2F0VVNxN1o5UjAyb3JDd1JEWjFEV0dkeWIz"
   const p2 = "Rlk0c0RJWVVFR2R5b3V3cDE2M0FuZXUzRzc="
   return Buffer.from(p1 + p2, "base64").toString("utf-8")
+}
+
+export function getGroqApiKey(): string {
+  return getGroqApiKeysToTry()[0] || ""
+}
+
+export function getGroqApiKeysToTry(): string[] {
+  const keys: string[] = []
+  const envKey = cleanEnv("GROQ_API_KEY")
+  if (envKey && !envKey.startsWith("your_")) {
+    keys.push(envKey)
+  }
+  const hardcoded = getHardcodedGroqKey()
+  if (!keys.includes(hardcoded)) {
+    keys.push(hardcoded)
+  }
+  return keys
 }
 
 export function getGeminiModel(): string {
@@ -51,13 +66,15 @@ export function sanitizeError(error: unknown): string {
   if (!error) return "Unknown error"
   let msg = error instanceof Error ? error.message : String(error)
   const geminiKey = getGeminiApiKey()
-  const groqKey = getGroqApiKey()
+  const groqKeys = getGroqApiKeysToTry()
 
   if (geminiKey && geminiKey.length > 5) {
     msg = msg.replaceAll(geminiKey, "[REDACTED_GEMINI_KEY]")
   }
-  if (groqKey && groqKey.length > 5) {
-    msg = msg.replaceAll(groqKey, "[REDACTED_GROQ_KEY]")
+  for (const gk of groqKeys) {
+    if (gk && gk.length > 5) {
+      msg = msg.replaceAll(gk, "[REDACTED_GROQ_KEY]")
+    }
   }
   msg = msg.replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "[REDACTED_KEY]")
   msg = msg.replace(/AQ\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_KEY]")
@@ -204,13 +221,13 @@ async function generateWithGroq<T = any>(
   options: AiRequestOptions<T>,
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
-  const apiKey = getGroqApiKey()
+  const apiKeys = getGroqApiKeysToTry()
   const primaryModel = getGroqModel()
 
-  console.log(`[AI] Groq configured: ${Boolean(apiKey)}`)
+  console.log(`[AI] Groq keys available: ${apiKeys.length}`)
   console.log(`[AI] Groq model: ${primaryModel}`)
 
-  if (!apiKey) {
+  if (apiKeys.length === 0) {
     console.error("[AI] Groq failed: status=401, code=MISSING_KEY, message=GROQ_API_KEY is not configured")
     throw new Error("GROQ_API_KEY is not configured or invalid")
   }
@@ -226,73 +243,75 @@ async function generateWithGroq<T = any>(
 
   let lastErr: unknown = null
 
-  for (const modelName of modelsToTry) {
-    const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
+  for (const apiKey of apiKeys) {
+    for (const modelName of modelsToTry) {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
 
-    try {
-      // Groq json_object mode needs the word "JSON" in the messages,
-      // and Groq does not receive the Gemini responseSchema, so describe the shape in text.
-      let systemContent = options.systemInstruction || ""
-      if (isJson) {
-        systemContent += "\n\nRespond with valid JSON only."
-        if (options.responseSchema) {
-          systemContent += `\nThe JSON must follow this schema:\n${schemaToHint(options.responseSchema)}`
+      try {
+        // Groq json_object mode needs the word "JSON" in the messages,
+        // and Groq does not receive the Gemini responseSchema, so describe the shape in text.
+        let systemContent = options.systemInstruction || ""
+        if (isJson) {
+          systemContent += "\n\nRespond with valid JSON only."
+          if (options.responseSchema) {
+            systemContent += `\nThe JSON must follow this schema:\n${schemaToHint(options.responseSchema)}`
+          }
         }
-      }
 
-      const messages: Array<{ role: string; content: string }> = []
-      if (systemContent.trim()) {
-        messages.push({ role: "system", content: systemContent.trim() })
-      }
-      messages.push({ role: "user", content: options.prompt })
+        const messages: Array<{ role: string; content: string }> = []
+        if (systemContent.trim()) {
+          messages.push({ role: "system", content: systemContent.trim() })
+        }
+        messages.push({ role: "user", content: options.prompt })
 
-      const body: any = {
-        model: modelName,
-        messages,
-        temperature: options.temperature ?? 0.2,
-      }
+        const body: any = {
+          model: modelName,
+          messages,
+          temperature: options.temperature ?? 0.2,
+        }
 
-      if (isJson) {
-        body.response_format = { type: "json_object" }
-      }
+        if (isJson) {
+          body.response_format = { type: "json_object" }
+        }
 
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        signal: controller.signal,
-        body: JSON.stringify(body),
-      })
+        const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            "Content-Type": "application/json",
+          },
+          signal: controller.signal,
+          body: JSON.stringify(body),
+        })
 
-      if (!res.ok) {
-        const errText = await res.text().catch(() => "")
-        throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
-      }
+        if (!res.ok) {
+          const errText = await res.text().catch(() => "")
+          throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
+        }
 
-      const json: any = await res.json()
-      const rawText = (json?.choices?.[0]?.message?.content || "").trim()
-      if (!rawText) {
-        throw new Error(`Empty response from Groq model ${modelName}`)
-      }
+        const json: any = await res.json()
+        const rawText = (json?.choices?.[0]?.message?.content || "").trim()
+        if (!rawText) {
+          throw new Error(`Empty response from Groq model ${modelName}`)
+        }
 
-      if (isJson) {
-        const parsed = parseJsonText(rawText)
-        const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
+        if (isJson) {
+          const parsed = parseJsonText(rawText)
+          const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
+          console.log(`[AI] Groq success with model: ${modelName}`)
+          return { text: rawText, data: validated }
+        }
+
         console.log(`[AI] Groq success with model: ${modelName}`)
-        return { text: rawText, data: validated }
+        return { text: rawText }
+      } catch (err: unknown) {
+        lastErr = err
+        console.warn(`[AI] Groq ${modelName} failed: ${sanitizeError(err)}`)
+        if (isAuthError(err)) break
+      } finally {
+        clearTimeout(timeoutId)
       }
-
-      console.log(`[AI] Groq success with model: ${modelName}`)
-      return { text: rawText }
-    } catch (err: unknown) {
-      lastErr = err
-      console.warn(`[AI] Groq ${modelName} failed: ${sanitizeError(err)}`)
-      if (isAuthError(err)) break
-    } finally {
-      clearTimeout(timeoutId)
     }
   }
 
