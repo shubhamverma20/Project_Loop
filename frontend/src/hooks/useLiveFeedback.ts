@@ -23,7 +23,7 @@ export function useLiveFeedback(onNewFeedbackReceived?: (item: LiveFeedbackItem)
 
   useEffect(() => {
     let es: EventSource | null = null
-    const defaultApiUrl = process.env.NODE_ENV === "production" ? "https://project-loop-llid.onrender.com" : "http://localhost:5000"
+    const defaultApiUrl = process.env.NODE_ENV === "production" ? "https://project-loop-1-5zzp.onrender.com" : "http://localhost:5000"
     const apiUrl = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
     const savedToken = typeof window !== "undefined" ? localStorage.getItem("session_token") : ""
 

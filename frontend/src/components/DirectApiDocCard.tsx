@@ -9,7 +9,7 @@ export function DirectApiDocCard() {
   const [copiedSnippet, setCopiedSnippet] = useState(false)
   const [activeTab, setActiveTab] = useState<"curl" | "fetch">("curl")
 
-  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://project-loop-llid.onrender.com"
+  const baseUrl = process.env.NEXT_PUBLIC_API_URL || "https://project-loop-1-5zzp.onrender.com"
   const endpointUrl = `${baseUrl}/api/feedback`
 
   const curlSnippet = `curl -X POST "${endpointUrl}" \\

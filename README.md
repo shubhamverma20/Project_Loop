@@ -18,6 +18,11 @@
 * **Database**: Neon Serverless PostgreSQL with Prisma ORM and `pgvector` extension.
 * **AI Engine**: **Google Gemini AI** (`@google/genai`) for automated sentiment scoring, tag extraction, auto-categorization, and executive report generation.
 * **Security & Auth**: Dual authentication via HTTP-Only JWT cookies or `Bearer` tokens, Google OAuth 2.0, and Brevo Email OTP verification.
+
+### 🌐 Live Production Deployments
+* **Live Frontend App**: [project-loop-fu2f-git-main-shubhamverma20s-projects.vercel.app](https://project-loop-fu2f-git-main-shubhamverma20s-projects.vercel.app)
+* **Live Backend API**: [https://project-loop-1-5zzp.onrender.com](https://project-loop-1-5zzp.onrender.com)
+* **API Health Check**: `https://project-loop-1-5zzp.onrender.com/health`
 * **Testing**: Comprehensive E2E testing suite powered by **Playwright** and backend unit/integration tests with **Vitest**.
 
 ---
