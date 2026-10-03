@@ -1,7 +1,8 @@
 import { prisma } from "../lib/prisma.js"
 import { subDays, startOfDay, endOfDay } from "date-fns"
-import { GoogleGenAI, Type } from "@google/genai"
+import { Type } from "@google/genai"
 import { DateRange } from "./analytics.js"
+import { generateJson, sanitizeError } from "../lib/ai-provider.js"
 
 export interface InsightReport {
   metrics: {
@@ -86,11 +87,6 @@ export async function generateInsightsReport(
       }
     }
 
-    const rawApiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "")
-    if (!rawApiKey || rawApiKey.startsWith("your_")) {
-      return { error: "Gemini API key is not configured. Please set GEMINI_API_KEY in backend/.env.", data: null }
-    }
-
     // 1. CALCULATE REAL STATISTICS IN APPLICATION CODE
     const periodDays = Math.max(1, Math.round((endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24)))
     const prevStartDate = subDays(startDate, periodDays)
@@ -143,7 +139,7 @@ export async function generateInsightsReport(
       sentimentShiftPercentage
     }
 
-    // 2. PREPARE GROUNDED CONTEXT FOR GEMINI NARRATIVE GENERATION
+    // 2. PREPARE GROUNDED CONTEXT FOR AI NARRATIVE GENERATION
     const uniqueFeedbackSet = new Set<string>()
     const sampledFeedback: Array<{ content: string; sentiment: string; category: string }> = []
 
@@ -160,8 +156,6 @@ export async function generateInsightsReport(
         if (sampledFeedback.length >= 60) break
       }
     }
-
-    const ai = new GoogleGenAI({ apiKey: rawApiKey })
 
     const systemPrompt = `You are an elite Chief Product Officer and Voice-of-Customer (VoC) Intelligence AI Analyst.
 Synthesize the provided CALCULATED REAL STATISTICS and customer feedback samples to compose a Voice-of-Customer Executive Report.
@@ -232,60 +226,27 @@ FEEDBACK SAMPLES (${sampledFeedback.length} items):
 ${JSON.stringify(sampledFeedback, null, 2)}
 `
 
-    const primaryModel = process.env.GEMINI_MODEL || "gemini-3.6-flash"
-    const fallbackModel = "gemini-3.5-flash"
-    const modelsToTry = [primaryModel, fallbackModel, "gemini-3.5-flash-lite"]
-
-    let response: any = null
-    let lastError: unknown = null
-
-    for (const modelName of modelsToTry) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: promptContext,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: 0.2,
-            responseMimeType: "application/json",
-            responseSchema: responseSchema
-          }
-        })
-        if (response?.text) break
-      } catch (err: any) {
-        lastError = err
-        const msg = String(err?.message || err || "")
-        if (msg.includes("API key") || msg.includes("API_KEY") || msg.includes("401") || msg.includes("403") || msg.includes("UNAUTHENTICATED") || msg.includes("invalid")) {
-          return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key. Please generate a valid key starting with 'AIzaSy...' from https://aistudio.google.com and set GEMINI_API_KEY in backend/.env.", data: null }
-        }
-        if (msg.includes("429") || msg.includes("RESOURCE_EXHAUSTED") || msg.includes("quota")) {
-          return { error: "Gemini API Rate Limit / Quota Exceeded. Please try again later.", data: null }
-        }
-      }
+    let parsedNarrative: any
+    try {
+      parsedNarrative = await generateJson({
+        prompt: promptContext,
+        systemInstruction: systemPrompt,
+        responseSchema,
+        temperature: 0.2
+      })
+    } catch (aiErr: unknown) {
+      console.error("AI Report Generation Failed (Primary Gemini & Fallback Groq):", sanitizeError(aiErr))
+      return { error: "AI service is temporarily unavailable. Please try again later.", data: null }
     }
-
-    if (!response || !response.text) {
-      const errMessage = lastError instanceof Error ? lastError.message : String(lastError)
-      return { error: `Gemini AI Report Generation Failed: ${errMessage}`, data: null }
-    }
-
-    let textToParse = (response.text || "").trim()
-    if (textToParse.startsWith("```json")) {
-      textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-    } else if (textToParse.startsWith("```")) {
-      textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
-    }
-
-    const parsedNarrative = JSON.parse(textToParse)
 
     const reportData: InsightReport = {
       metrics: calculatedStats,
-      executiveSummary: parsedNarrative.executiveSummary || "Voice-of-Customer report generated.",
-      keyTrends: parsedNarrative.keyTrends || [],
-      topCustomerPains: parsedNarrative.topCustomerPains || [],
-      notableCustomerQuotes: parsedNarrative.notableCustomerQuotes || notableQuotes,
-      recommendedActions: parsedNarrative.recommendedActions || [],
-      sentimentAnalysis: parsedNarrative.sentimentAnalysis || { overallMood: "Neutral", positiveDrivers: [], negativeDrivers: [] }
+      executiveSummary: parsedNarrative?.executiveSummary || "Voice-of-Customer report generated.",
+      keyTrends: parsedNarrative?.keyTrends || [],
+      topCustomerPains: parsedNarrative?.topCustomerPains || [],
+      notableCustomerQuotes: parsedNarrative?.notableCustomerQuotes || notableQuotes,
+      recommendedActions: parsedNarrative?.recommendedActions || [],
+      sentimentAnalysis: parsedNarrative?.sentimentAnalysis || { overallMood: "Neutral", positiveDrivers: [], negativeDrivers: [] }
     }
 
     const savedReport = await prisma.report.create({
@@ -306,14 +267,7 @@ ${JSON.stringify(sampledFeedback, null, 2)}
       }
     }
   } catch (err: unknown) {
-    console.error("Generate VoC Report Error:", err)
-    const errMessage = err instanceof Error ? err.message : String(err)
-    if (errMessage.includes("API key") || errMessage.includes("401") || errMessage.includes("403") || errMessage.includes("UNAUTHENTICATED")) {
-      return { error: "Gemini API Authentication Failed: Invalid or unauthorized API key. Please generate a valid key starting with 'AIzaSy...' from https://aistudio.google.com and set GEMINI_API_KEY in backend/.env.", data: null }
-    }
-    if (errMessage.includes("429") || errMessage.includes("RESOURCE_EXHAUSTED") || errMessage.includes("quota")) {
-      return { error: "Gemini API Rate Limit / Quota Exceeded. Please try again later.", data: null }
-    }
-    return { error: errMessage || "Failed to generate Voice of Customer report", data: null }
+    console.error("Generate VoC Report Error:", sanitizeError(err))
+    return { error: "Failed to generate Voice of Customer report. Please try again later.", data: null }
   }
 }

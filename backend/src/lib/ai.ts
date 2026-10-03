@@ -1,5 +1,6 @@
-import { GoogleGenAI, Type } from "@google/genai"
+import { Type } from "@google/genai"
 import { z } from "zod"
+import { generateJson, sanitizeError } from "./ai-provider.js"
 
 export const classificationSchema = z.object({
   sentiment: z.enum(["POS", "NEU", "NEG"]),
@@ -19,69 +20,6 @@ const SAFE_DEFAULT_CLASSIFICATION: ClassificationResult = {
   featureArea: "General",
   category: "Other",
   rationale: "Classification fallback used."
-}
-
-const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) => setTimeout(() => reject(new Error("AI Request Timed Out")), ms))
-  ])
-}
-
-async function callGroqClassification(
-  text: string,
-  systemPrompt: string
-): Promise<ClassificationResult> {
-  const apiKey = (process.env.GROQ_API_KEY || "").trim().replace(/^["']|["']$/g, "")
-  if (!apiKey || apiKey.startsWith("your_")) {
-    throw new Error("GROQ_API_KEY is not configured")
-  }
-
-  console.log("AI Provider: Groq")
-  const modelName = process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 10000)
-
-  try {
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify({
-        model: modelName,
-        response_format: { type: "json_object" },
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: `Analyze this feedback:\n\n${text}` },
-        ],
-        temperature: 0.1,
-      }),
-    })
-
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "")
-      throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
-    }
-
-    const data: any = await res.json()
-    const content = data?.choices?.[0]?.message?.content || ""
-    let textToParse = content.trim()
-
-    if (textToParse.startsWith("```json")) {
-      textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-    } else if (textToParse.startsWith("```")) {
-      textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
-    }
-
-    const parsedJson = JSON.parse(textToParse)
-    return classificationSchema.parse(parsedJson)
-  } finally {
-    clearTimeout(timeoutId)
-  }
 }
 
 export async function classifyFeedback(
@@ -107,88 +45,34 @@ The JSON object must strictly match this schema:
   "rationale": string (brief 1-sentence reasoning for the classification)
 }${themeContext}`
 
-  // 1. PRIMARY PROVIDER: GEMINI
-  const geminiApiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "")
-
-  if (geminiApiKey && !geminiApiKey.startsWith("your_")) {
-    console.log("AI Provider: Gemini")
-    try {
-      const ai = new GoogleGenAI({ apiKey: geminiApiKey })
-      const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash"
-      const fallbackModels = ["gemini-1.5-flash", "gemini-2.0-flash"]
-      const modelsToTry = [primaryModel, ...fallbackModels.filter((m) => m !== primaryModel)]
-
-      const responseSchema = {
-        type: Type.OBJECT,
-        properties: {
-          sentiment: { type: Type.STRING, enum: ["POS", "NEU", "NEG"] },
-          sentimentScore: { type: Type.NUMBER },
-          themes: { type: Type.ARRAY, items: { type: Type.STRING } },
-          featureArea: { type: Type.STRING },
-          category: {
-            type: Type.STRING,
-            enum: ["Bug", "Feature Request", "Complaint", "Praise", "Question", "Other"],
-          },
-          rationale: { type: Type.STRING },
-        },
-        required: ["sentiment", "sentimentScore", "themes", "featureArea", "category", "rationale"],
-      }
-
-      for (const modelName of modelsToTry) {
-        try {
-          const response = await withTimeout(
-            ai.models.generateContent({
-              model: modelName,
-              contents: `Analyze this feedback:\n\n${text}`,
-              config: {
-                systemInstruction: systemPrompt,
-                temperature: 0.1,
-                responseMimeType: "application/json",
-                responseSchema: responseSchema,
-              },
-            }),
-            10000
-          )
-
-          const rawContent = response.text || ""
-          let textToParse = rawContent.trim()
-          if (textToParse.startsWith("```json")) {
-            textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-          } else if (textToParse.startsWith("```")) {
-            textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
-          }
-
-          const parsedJson = JSON.parse(textToParse)
-          return classificationSchema.parse(parsedJson)
-        } catch (err: any) {
-          const msg = String(err?.message || err || "")
-          if (
-            msg.includes("401") ||
-            msg.includes("403") ||
-            msg.includes("API key") ||
-            msg.includes("UNAUTHENTICATED") ||
-            msg.includes("invalid")
-          ) {
-            console.error("Gemini API Authentication Failed: Invalid or unauthorized API key.")
-            break
-          }
-        }
-      }
-      console.log("Gemini quota/rate limit reached. Switching to Groq...")
-    } catch {
-      console.log("Gemini quota/rate limit reached. Switching to Groq...")
-    }
-  } else {
-    console.log("Gemini API key not configured. Switching to Groq...")
+  const responseSchema = {
+    type: Type.OBJECT,
+    properties: {
+      sentiment: { type: Type.STRING, enum: ["POS", "NEU", "NEG"] },
+      sentimentScore: { type: Type.NUMBER },
+      themes: { type: Type.ARRAY, items: { type: Type.STRING } },
+      featureArea: { type: Type.STRING },
+      category: {
+        type: Type.STRING,
+        enum: ["Bug", "Feature Request", "Complaint", "Praise", "Question", "Other"],
+      },
+      rationale: { type: Type.STRING },
+    },
+    required: ["sentiment", "sentimentScore", "themes", "featureArea", "category", "rationale"],
   }
 
-  // 2. FALLBACK PROVIDER: GROQ
   try {
-    return await callGroqClassification(text, systemPrompt)
-  } catch {
-    console.log("Groq failed. Using fallback classification.")
+    const result = await generateJson<ClassificationResult>({
+      prompt: `Analyze this feedback:\n\n${text}`,
+      systemInstruction: systemPrompt,
+      responseSchema,
+      zSchema: classificationSchema,
+      temperature: 0.1,
+      timeoutMs: 12000
+    })
+    return result
+  } catch (err: unknown) {
+    console.warn("Feedback classification failed for both Gemini and Groq providers:", sanitizeError(err))
+    return SAFE_DEFAULT_CLASSIFICATION
   }
-
-  // 3. SAFE DEFAULT FALLBACK
-  return SAFE_DEFAULT_CLASSIFICATION
 }

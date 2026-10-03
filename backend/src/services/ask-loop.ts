@@ -1,6 +1,6 @@
 import { prisma } from "../lib/prisma.js"
 import { generateEmbedding } from "../lib/embeddings.js"
-import { GoogleGenAI } from "@google/genai"
+import { generateText, sanitizeError } from "../lib/ai-provider.js"
 
 export interface GroundedCitation {
   id: string
@@ -32,16 +32,6 @@ export async function askLoopGroundedQa(
       hasSufficientEvidence: false,
       evidence: [],
       error: "Question string is required"
-    }
-  }
-
-  const rawApiKey = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "")
-  if (!rawApiKey || rawApiKey.startsWith("your_")) {
-    return {
-      answer: "Gemini API key is not configured.",
-      hasSufficientEvidence: false,
-      evidence: [],
-      error: "Gemini API key is missing or not configured. Please set GEMINI_API_KEY in backend/.env."
     }
   }
 
@@ -101,41 +91,24 @@ CRITICAL RULES:
 4. Reference evidence numbers (e.g., [Evidence #1]) when highlighting specific customer points.
 5. Keep your answer objective, concise, and structured.`
 
-    const ai = new GoogleGenAI({ apiKey: rawApiKey })
-
-    const primaryModel = process.env.GEMINI_MODEL || "gemini-3.6-flash"
-    const fallbackModel = "gemini-3.5-flash"
-    const modelsToTry = [primaryModel, fallbackModel, "gemini-3.5-flash-lite"]
-
-    let response: any = null
-    let lastError: unknown = null
-
-    for (const modelName of modelsToTry) {
-      try {
-        response = await ai.models.generateContent({
-          model: modelName,
-          contents: `User Question: "${trimmedQuestion}"\n\nRETRIEVED EVIDENCE ITEMS:\n${evidenceText}`,
-          config: {
-            systemInstruction: systemPrompt,
-            temperature: 0.1
-          }
-        })
-        if (response?.text) break
-      } catch (err: any) {
-        lastError = err
-        const msg = String(err?.message || err || "")
-        if (msg.includes("API key") || msg.includes("API_KEY") || msg.includes("401") || msg.includes("403") || msg.includes("UNAUTHENTICATED") || msg.includes("invalid")) {
-          return {
-            answer: "Gemini API Authentication Failed: Invalid or unauthorized API key.",
-            hasSufficientEvidence: false,
-            evidence: citations,
-            error: "Gemini API Authentication Failed: Invalid or unauthorized API key. Please generate a valid key starting with 'AIzaSy...' from https://aistudio.google.com and set GEMINI_API_KEY in backend/.env."
-          }
-        }
+    let answerText = ""
+    try {
+      answerText = await generateText({
+        prompt: `User Question: "${trimmedQuestion}"\n\nRETRIEVED EVIDENCE ITEMS:\n${evidenceText}`,
+        systemInstruction: systemPrompt,
+        temperature: 0.1
+      })
+    } catch (aiErr: unknown) {
+      console.error("Ask LOOP AI Generation Error (Gemini & Groq failed):", sanitizeError(aiErr))
+      return {
+        answer: "AI service is temporarily unavailable. Please try again later.",
+        hasSufficientEvidence: false,
+        evidence: citations,
+        error: "AI service is temporarily unavailable."
       }
     }
 
-    const answer = (response?.text || "").trim() || "Based on the available customer feedback, there is insufficient evidence to answer this question."
+    const answer = answerText.trim() || "Based on the available customer feedback, there is insufficient evidence to answer this question."
 
     return {
       answer,
@@ -143,13 +116,12 @@ CRITICAL RULES:
       evidence: citations
     }
   } catch (err: unknown) {
-    console.error("Ask LOOP Grounded Q&A Error:", err)
-    const errMessage = err instanceof Error ? err.message : String(err)
+    console.error("Ask LOOP Grounded Q&A Error:", sanitizeError(err))
     return {
-      answer: "Unable to process Ask LOOP request.",
+      answer: "Unable to process Ask LOOP request. Please try again later.",
       hasSufficientEvidence: false,
       evidence: [],
-      error: errMessage
+      error: "Failed to process Q&A request"
     }
   }
 }
