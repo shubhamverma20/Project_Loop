@@ -14,26 +14,38 @@ export interface AiRequestOptions<T = any> {
 // HELPER: ENV KEYS, MODELS & ERROR SANITIZATION
 // -----------------------------------------------------------------------------
 
+function cleanEnv(name: string): string {
+  let value = (process.env[name] || "").trim()
+  // If the whole line "KEY=value" was pasted into the value box, strip the "KEY=" part
+  if (value.startsWith(`${name}=`)) value = value.slice(name.length + 1).trim()
+  return value.replace(/^["']|["']$/g, "").trim()
+}
+
 export function getGeminiApiKey(): string {
-  const key = (process.env.GEMINI_API_KEY || "").trim().replace(/^["']|["']$/g, "")
+  const key = cleanEnv("GEMINI_API_KEY")
   if (!key || key.startsWith("your_")) return ""
   return key
 }
 
 export function getGroqApiKey(): string {
-  const key = (process.env.GROQ_API_KEY || "").trim().replace(/^["']|["']$/g, "")
+  const key = cleanEnv("GROQ_API_KEY")
   if (!key || key.startsWith("your_")) return ""
   return key
 }
 
 export function getGeminiModel(): string {
-  const model = (process.env.GEMINI_MODEL || "").trim().replace(/^["']|["']$/g, "")
-  return model || "gemini-3.8-flash"
+  return cleanEnv("GEMINI_MODEL") || "gemini-2.5-flash"
 }
 
 export function getGroqModel(): string {
-  const model = (process.env.GROQ_MODEL || "").trim().replace(/^["']|["']$/g, "")
-  return model || "llama-3.3-70b-versatile"
+  return cleanEnv("GROQ_MODEL") || "openai/gpt-oss-20b"
+}
+
+// "AQ." keys are Vertex AI express-mode keys; "AIzaSy" keys are Gemini Developer API keys.
+function createGeminiClient(apiKey: string) {
+  return apiKey.startsWith("AQ.")
+    ? new GoogleGenAI({ vertexai: true, apiKey })
+    : new GoogleGenAI({ apiKey })
 }
 
 export function sanitizeError(error: unknown): string {
@@ -49,7 +61,8 @@ export function sanitizeError(error: unknown): string {
     msg = msg.replaceAll(groqKey, "[REDACTED_GROQ_KEY]")
   }
   msg = msg.replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "[REDACTED_KEY]")
-  msg = msg.replace(/gsk_[A-Za-z0-9_-]{48}/g, "[REDACTED_KEY]")
+  msg = msg.replace(/AQ\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_KEY]")
+  msg = msg.replace(/gsk_[A-Za-z0-9_-]{20,}/g, "[REDACTED_KEY]")
   return msg
 }
 
@@ -58,9 +71,12 @@ function extractErrorDetails(err: any): { status: string; code: string; message:
   let status = err.status || err.statusCode || err.response?.status
   if (!status) {
     const msg = String(err.message || err)
-    if (msg.includes("401")) status = "401"
+    const httpMatch = msg.match(/HTTP (\d{3})/)
+    if (httpMatch) status = httpMatch[1]
+    else if (msg.includes("401")) status = "401"
     else if (msg.includes("403")) status = "403"
     else if (msg.includes("404")) status = "404"
+    else if (msg.includes("413")) status = "413"
     else if (msg.includes("429")) status = "429"
     else if (msg.includes("503")) status = "503"
     else status = "500"
@@ -68,6 +84,11 @@ function extractErrorDetails(err: any): { status: string; code: string; message:
   const code = err.code || err.errorCode || err.error?.code || "ERR"
   const message = sanitizeError(err.message || err)
   return { status: String(status), code: String(code), message }
+}
+
+function isAuthError(err: unknown): boolean {
+  const { status } = extractErrorDetails(err)
+  return status === "401" || status === "403"
 }
 
 const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
@@ -79,6 +100,25 @@ const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
   ])
 }
 
+function parseJsonText(rawText: string): any {
+  let textToParse = rawText
+  if (textToParse.startsWith("```json")) {
+    textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
+  } else if (textToParse.startsWith("```")) {
+    textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
+  }
+  return JSON.parse(textToParse)
+}
+
+// Converts the Gemini-style responseSchema into a plain-text shape hint for Groq
+function schemaToHint(schema: any): string {
+  try {
+    return JSON.stringify(schema, null, 1)
+  } catch {
+    return ""
+  }
+}
+
 // -----------------------------------------------------------------------------
 // 1. PRIMARY PROVIDER: GEMINI
 // -----------------------------------------------------------------------------
@@ -88,10 +128,9 @@ async function generateWithGemini<T = any>(
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
   const apiKey = getGeminiApiKey()
-  const isConfigured = Boolean(apiKey)
   const primaryModel = getGeminiModel()
 
-  console.log(`[AI] Gemini configured: ${isConfigured}`)
+  console.log(`[AI] Gemini configured: ${Boolean(apiKey)}`)
   console.log(`[AI] Gemini model: ${primaryModel}`)
 
   if (!apiKey) {
@@ -99,17 +138,10 @@ async function generateWithGemini<T = any>(
     throw new Error("GEMINI_API_KEY is not configured or invalid")
   }
 
-  console.log("[AI] Gemini request started")
+  console.log(`[AI] Gemini request started (mode: ${apiKey.startsWith("AQ.") ? "vertex-express" : "developer-api"})`)
 
-  const ai = new GoogleGenAI({ apiKey })
-  const fallbackModels = [
-    "gemini-3.8-flash",
-    "gemini-3.5-flash",
-    "gemini-3.6-flash",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash"
-  ]
+  const ai = createGeminiClient(apiKey)
+  const fallbackModels = ["gemini-2.5-flash", "gemini-2.0-flash"]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
@@ -144,14 +176,7 @@ async function generateWithGemini<T = any>(
       }
 
       if (isJson) {
-        let textToParse = rawText
-        if (textToParse.startsWith("```json")) {
-          textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-        } else if (textToParse.startsWith("```")) {
-          textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
-        }
-
-        const parsed = JSON.parse(textToParse)
+        const parsed = parseJsonText(rawText)
         const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
         console.log(`[AI] Gemini success with model: ${modelName}`)
         return { text: rawText, data: validated }
@@ -161,11 +186,14 @@ async function generateWithGemini<T = any>(
       return { text: rawText }
     } catch (err: unknown) {
       lastErr = err
+      console.warn(`[AI] Gemini ${modelName} failed: ${sanitizeError(err)}`)
+      // Bad key: trying other models is pointless
+      if (isAuthError(err)) break
     }
   }
 
   const details = extractErrorDetails(lastErr)
-  console.warn(`[AI] Gemini failed: status=${details.status}, code=${details.code}, message=${details.message}`)
+  console.warn(`[AI] Gemini failed: status=${details.status}, code=${details.code}`)
   throw new Error(`Gemini failed: ${details.message}`)
 }
 
@@ -178,10 +206,9 @@ async function generateWithGroq<T = any>(
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
   const apiKey = getGroqApiKey()
-  const isConfigured = Boolean(apiKey)
   const primaryModel = getGroqModel()
 
-  console.log(`[AI] Groq configured: ${isConfigured}`)
+  console.log(`[AI] Groq configured: ${Boolean(apiKey)}`)
   console.log(`[AI] Groq model: ${primaryModel}`)
 
   if (!apiKey) {
@@ -192,13 +219,9 @@ async function generateWithGroq<T = any>(
   console.log("[AI] Groq request started")
 
   const fallbackModels = [
+    "openai/gpt-oss-20b",
     "llama-3.3-70b-versatile",
     "llama-3.1-8b-instant",
-    "openai/gpt-oss-20b",
-    "openai/gpt-oss-120b",
-    "qwen/qwen3.8-27b",
-    "allam-2-7b",
-    "mixtral-8x7b-32768"
   ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
@@ -206,12 +229,22 @@ async function generateWithGroq<T = any>(
 
   for (const modelName of modelsToTry) {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20000)
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
 
     try {
+      // Groq json_object mode needs the word "JSON" in the messages,
+      // and Groq does not receive the Gemini responseSchema, so describe the shape in text.
+      let systemContent = options.systemInstruction || ""
+      if (isJson) {
+        systemContent += "\n\nRespond with valid JSON only."
+        if (options.responseSchema) {
+          systemContent += `\nThe JSON must follow this schema:\n${schemaToHint(options.responseSchema)}`
+        }
+      }
+
       const messages: Array<{ role: string; content: string }> = []
-      if (options.systemInstruction) {
-        messages.push({ role: "system", content: options.systemInstruction })
+      if (systemContent.trim()) {
+        messages.push({ role: "system", content: systemContent.trim() })
       }
       messages.push({ role: "user", content: options.prompt })
 
@@ -247,14 +280,7 @@ async function generateWithGroq<T = any>(
       }
 
       if (isJson) {
-        let textToParse = rawText
-        if (textToParse.startsWith("```json")) {
-          textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-        } else if (textToParse.startsWith("```")) {
-          textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
-        }
-
-        const parsed = JSON.parse(textToParse)
+        const parsed = parseJsonText(rawText)
         const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
         console.log(`[AI] Groq success with model: ${modelName}`)
         return { text: rawText, data: validated }
@@ -264,13 +290,15 @@ async function generateWithGroq<T = any>(
       return { text: rawText }
     } catch (err: unknown) {
       lastErr = err
+      console.warn(`[AI] Groq ${modelName} failed: ${sanitizeError(err)}`)
+      if (isAuthError(err)) break
     } finally {
       clearTimeout(timeoutId)
     }
   }
 
   const details = extractErrorDetails(lastErr)
-  console.error(`[AI] Groq failed: status=${details.status}, code=${details.code}, message=${details.message}`)
+  console.error(`[AI] Groq failed: status=${details.status}, code=${details.code}`)
   throw new Error(`Groq failed: ${details.message}`)
 }
 
