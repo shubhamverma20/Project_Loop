@@ -1,124 +1,181 @@
-# Project LOOP - Production Architecture
+# 🚀 Project LOOP - Customer Feedback & AI Analytics Platform
 
-## Overview
-Project LOOP is a modern, enterprise-ready Customer Feedback & AI Analytics Platform split into a decoupled Production Architecture:
-- **FRONTEND**: Next.js 14 (App Router) deployed on **Vercel**
-- **BACKEND**: Node.js Express REST API & SSE Stream server deployed on **Render**
-- **DATABASE**: **Neon Serverless PostgreSQL** with `pgvector` vector database extension
-- **AI AGENT**: **Google Gemini AI** (`@google/genai`) for automated sentiment analysis, auto-categorization, vector embeddings, and executive report generation
-- **EMAIL & OTP**: **Brevo (Sendinblue)** API for transactional email verification and password reset OTPs
+[![E2E Tests](https://img.shields.io/badge/Playwright-E2E%20Passing-brightgreen?logo=playwright)](https://playwright.dev)
+[![Backend Tests](https://img.shields.io/badge/Vitest-Backend%20Passing-blue?logo=vitest)](https://vitest.dev)
+[![Next.js](https://img.shields.io/badge/Next.js-14%20App%20Router-black?logo=next.js)](https://nextjs.org)
+[![Express](https://img.shields.io/badge/Express-Backend-lightgrey?logo=express)](https://expressjs.com)
+[![PostgreSQL](https://img.shields.io/badge/Neon-PostgreSQL%20%2B%20pgvector-blue?logo=postgresql)](https://neon.tech)
+[![Gemini AI](https://img.shields.io/badge/Google%20Gemini-AI%20Engine-orange?logo=google)](https://ai.google.dev)
 
 ---
 
-## Workspace Structure
+## 📌 Overview
+
+**Project LOOP** is a modern, enterprise-ready Customer Feedback Ingestion & AI Analytics Platform built on a decoupled full-stack architecture:
+
+* **Frontend**: Next.js 14 App Router, Tailwind CSS, Recharts, Lucide Icons, and PapaParse.
+* **Backend**: Express.js REST API with Server-Sent Events (SSE) for real-time live streaming feedback.
+* **Database**: Neon Serverless PostgreSQL with Prisma ORM and `pgvector` extension.
+* **AI Engine**: **Google Gemini AI** (`@google/genai`) for automated sentiment scoring, tag extraction, auto-categorization, and executive report generation.
+* **Security & Auth**: Dual authentication via HTTP-Only JWT cookies or `Bearer` tokens, Google OAuth 2.0, and Brevo Email OTP verification.
+* **Testing**: Comprehensive E2E testing suite powered by **Playwright** and backend unit/integration tests with **Vitest**.
+
+---
+
+## ✨ Features
+
+- 🔐 **Authentication & Sessions**: Email/Password Registration & Login, Google One-Tap Sign-In, Password Reset via Brevo 6-digit OTP, Session management with `GET /api/auth/me`.
+- 📥 **Smart CSV Importer**: Automated column header analysis and synonym mapping supporting Customer Feedback CSVs (content, review, comment, rating) and E-Commerce Product Catalog CSVs.
+- ⚡ **Real-Time Live Streaming (SSE)**: Server-Sent Events endpoint pushing real-time customer feedback updates directly to the UI.
+- 🤖 **AI Executive Insights**: Powered by Google Gemini AI (`@google/genai`) for automatic sentiment classification, pain point extraction, and downloadable executive summary reports.
+- 📊 **Interactive Analytics Dashboard**: Filter feedback by date range (`7d`, `30d`, `90d`, `custom`), channel, sentiment distribution, and category trends.
+- 🛡️ **Role-Based Access Control (RBAC)**: Admin, Analyst, and Viewer permissions for team management and workspace settings.
+
+---
+
+## 📁 Repository Structure
+
 ```
 Project_Loop/
-├── backend/                  # Express REST API Server
-│   ├── prisma/               # Database schema & migrations (Prisma ONLY lives here)
+├── backend/                  # Express REST API & SSE Server
+│   ├── prisma/               # Schema & DB Migrations (Prisma)
 │   │   ├── schema.prisma
 │   │   └── seed.ts
 │   ├── src/
-│   │   ├── middleware/       # CORS, Auth JWT verification, Error handling
-│   │   ├── routes/           # REST endpoints (/api/auth, /api/feedback, /api/analytics, /api/settings, /api/reports)
-│   │   ├── services/         # Gemini AI, Brevo OTP, CSV Ingestion, Analytics, RBAC
-│   │   └── server.ts         # Express server listener (reads process.env.PORT)
-│   ├── tests/                # Vitest backend tests (GET /health)
-│   ├── package.json
-│   └── tsconfig.json
+│   │   ├── middleware/       # Auth JWT, CORS, Error Handling, Rate Limiting
+│   │   ├── routes/           # Auth, Feedback, CSV, Analytics, Insights, Reports, Settings
+│   │   ├── services/         # Gemini AI, CSV Processing, Brevo OTP, Ingestion
+│   │   └── server.ts         # Server entry point
+│   ├── tests/                # Vitest test suite
+│   └── package.json
 │
-├── frontend/                 # Next.js 14 App Router UI
+├── frontend/                 # Next.js 14 App Router
 │   ├── src/
-│   │   ├── app/              # Auth pages & (dashboard) layout/routes
-│   │   ├── components/       # UI cards, analytics charts, settings forms, filters
-│   │   ├── hooks/            # useLiveFeedback (SSE streaming hook)
-│   │   └── lib/              # api-client (fetch client with credentials: "include")
-│   ├── package.json
-│   └── tsconfig.json
+│   │   ├── app/              # (auth) & (dashboard) routes
+│   │   ├── components/       # Analytics charts, CSV Uploader, Insights components
+│   │   ├── hooks/            # useLiveFeedback SSE hook
+│   │   └── lib/              # API Client (credentials: "include")
+│   └── package.json
+│
+├── tests/
+│   └── e2e/                  # Playwright End-to-End test suite
+│       └── smoke.spec.ts
+│
+├── playwright.config.ts      # Playwright test & auto-webServer config
+├── package.json              # Monorepo root script runner
 └── README.md
 ```
 
 ---
 
-## Environment Variables Matrix
+## ⚙️ Environment Configuration
 
 ### Backend Environment Variables (`backend/.env`)
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `PORT` | Express listener port (set by Render automatically) | `5000` |
-| `DATABASE_URL` | Neon PostgreSQL pooled connection string | `postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require` |
-| `DIRECT_URL` | Neon PostgreSQL direct connection string for migrations | `postgresql://user:pass@ep-xyz.neon.tech/neondb?sslmode=require` |
-| `JWT_SECRET` | Secret key for signing JWT cookies | `your_long_random_jwt_secret_key` |
-| `FRONTEND_URL` | Vercel frontend URL(s) allowed by CORS | `https://project-loop-frontend.vercel.app,http://localhost:3000` |
-| `GEMINI_API_KEY` | Google Gemini AI Key | `AIzaSy...` |
-| `BREVO_API_KEY` | Brevo API key for emails/OTPs | `xkeysib-...` |
-| `SENDER_EMAIL` | Sender email registered in Brevo | `noreply@yourdomain.com` |
-| `SENDER_NAME` | Sender display name | `Project LOOP Security` |
-| `GOOGLE_CLIENT_ID` | Google OAuth Client ID | `xyz.apps.googleusercontent.com` |
+
+```env
+# Database & Server
+PORT=5000
+DATABASE_URL="postgresql://<user>:<password>@<host>/<database>?sslmode=require"
+FRONTEND_URL="http://localhost:3000"
+
+# Authentication
+JWT_SECRET="your-secure-jwt-secret"
+AUTH_SECRET="your-secure-auth-secret"
+
+# Google OAuth
+GOOGLE_CLIENT_ID="your-google-client-id"
+GOOGLE_CLIENT_SECRET="your-google-client-secret"
+
+# AI & Email Services
+GEMINI_API_KEY="your-gemini-api-key"
+BREVO_API_KEY="your-brevo-api-key"
+BREVO_SENDER_EMAIL="your-email@domain.com"
+BREVO_SENDER_NAME="Project LOOP"
+```
 
 ### Frontend Environment Variables (`frontend/.env.local`)
-| Variable | Description | Example |
-| :--- | :--- | :--- |
-| `NEXT_PUBLIC_API_URL` | Express Backend URL | `https://project-loop-backend.onrender.com` |
-| `NEXT_PUBLIC_GOOGLE_CLIENT_ID` | Google OAuth Client ID | `xyz.apps.googleusercontent.com` |
+
+```env
+NEXT_PUBLIC_API_URL="http://localhost:5000"
+NEXT_PUBLIC_APP_URL="http://localhost:3000"
+NEXT_PUBLIC_GOOGLE_CLIENT_ID="your-google-client-id"
+```
 
 ---
 
-## Deployment Step-by-Step Instructions
+## 🛠️ Quick Start & Local Setup
 
-### 1. Database Setup (Neon PostgreSQL)
-1. Create a PostgreSQL project on [Neon.tech](https://neon.tech).
-2. Copy the **Pooled Connection String** (`DATABASE_URL`) and **Direct Connection String** (`DIRECT_URL`).
-3. Run migrations and seed data from `backend/`:
-   ```bash
-   cd backend
-   npx prisma db push
-   npx prisma db seed
-   ```
+### 1. Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
+- PostgreSQL (or Neon.tech instance)
 
-### 2. Backend Deployment (Render)
-1. Create a new **Web Service** on [Render.com](https://render.com).
-2. Connect your GitHub repository and set Root Directory to `backend`.
-3. Set Build Command:
-   ```bash
-   npm install && npx prisma generate && npm run build
-   ```
-4. Set Start Command:
-   ```bash
-   npm start
-   ```
-5. Add all Backend environment variables in the Render Dashboard.
-6. Verify deployment by visiting `https://your-backend.onrender.com/health`. Output must be:
-   ```json
-   { "status": "ok" }
-   ```
+### 2. Install Dependencies
+```bash
+npm install
+npm run install --prefix backend
+npm run install --prefix frontend
+```
 
-### 3. Frontend Deployment (Vercel)
-1. Create a new project on [Vercel](https://vercel.com).
-2. Connect your GitHub repository and set Root Directory to `frontend`.
-3. Framework Preset: **Next.js**.
-4. Set Build Command: `npm run build`.
-5. Add Environment Variables:
-   - `NEXT_PUBLIC_API_URL` = `https://your-backend.onrender.com`
-   - `NEXT_PUBLIC_GOOGLE_CLIENT_ID` = `your_google_client_id`
-6. Deploy!
-
----
-
-## Verification & Build Commands
-
-### Backend Verification
+### 3. Setup Database & Prisma
 ```bash
 cd backend
-npm install
-npx tsc --noEmit
-npm test
-npm run build
+npx prisma db push
+npx prisma db seed
+cd ..
 ```
 
-### Frontend Verification
+### 4. Run Development Servers
+Run both frontend and backend concurrently from the root directory:
 ```bash
-cd frontend
-npm install
-npx tsc --noEmit
-npm run build
+npm run dev
 ```
+* **Frontend UI**: `http://localhost:3000`
+* **Express Backend**: `http://localhost:5000`
+
+---
+
+## 🧪 Running Automated Tests
+
+### 🎭 Playwright E2E Tests
+Playwright automatically handles spinning up the local dev server using the configured `webServer` option in `playwright.config.ts`.
+
+Run headless E2E test suite:
+```bash
+npx playwright test
+```
+
+Run in UI / Headed mode:
+```bash
+npx playwright test --ui
+# or
+npx playwright test --headed
+```
+
+### ⚡ Backend Unit & Integration Tests (Vitest)
+```bash
+npm test
+# or
+npm test --prefix backend
+```
+
+---
+
+## 🚢 Deployment Guide
+
+### Backend (Render / Railway)
+1. Set Root Directory: `backend`
+2. Build Command: `npm install && npx prisma generate && npm run build`
+3. Start Command: `npm start`
+4. Health Check URL: `GET /health`
+
+### Frontend (Vercel)
+1. Set Root Directory: `frontend`
+2. Framework Preset: `Next.js`
+3. Set `NEXT_PUBLIC_API_URL` to your production backend URL.
+
+---
+
+## 📄 License
+
+Distributed under the MIT License. See `LICENSE` for details.
