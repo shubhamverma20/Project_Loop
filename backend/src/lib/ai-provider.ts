@@ -33,7 +33,7 @@ export function getGeminiModel(): string {
 
 export function getGroqModel(): string {
   const model = (process.env.GROQ_MODEL || "").trim().replace(/^["']|["']$/g, "")
-  return model || "openai/gpt-oss-20b"
+  return model || "llama-3.3-70b-versatile"
 }
 
 export function sanitizeError(error: unknown): string {
@@ -102,7 +102,14 @@ async function generateWithGemini<T = any>(
   console.log("[AI] Gemini request started")
 
   const ai = new GoogleGenAI({ apiKey })
-  const fallbackModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-2.5-flash"]
+  const fallbackModels = [
+    "gemini-3.8-flash",
+    "gemini-3.5-flash",
+    "gemini-3.6-flash",
+    "gemini-2.5-flash",
+    "gemini-2.0-flash",
+    "gemini-1.5-flash"
+  ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
@@ -159,7 +166,7 @@ async function generateWithGemini<T = any>(
 
   const details = extractErrorDetails(lastErr)
   console.warn(`[AI] Gemini failed: status=${details.status}, code=${details.code}, message=${details.message}`)
-  throw new Error(`Gemini generation failed: ${details.message}`)
+  throw new Error(`Gemini failed: ${details.message}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -184,7 +191,15 @@ async function generateWithGroq<T = any>(
 
   console.log("[AI] Groq request started")
 
-  const fallbackModels = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "allam-2-7b"]
+  const fallbackModels = [
+    "llama-3.3-70b-versatile",
+    "llama-3.1-8b-instant",
+    "openai/gpt-oss-20b",
+    "openai/gpt-oss-120b",
+    "qwen/qwen3.8-27b",
+    "allam-2-7b",
+    "mixtral-8x7b-32768"
+  ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
@@ -256,7 +271,7 @@ async function generateWithGroq<T = any>(
 
   const details = extractErrorDetails(lastErr)
   console.error(`[AI] Groq failed: status=${details.status}, code=${details.code}, message=${details.message}`)
-  throw new Error(`Groq generation failed: ${details.message}`)
+  throw new Error(`Groq failed: ${details.message}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -267,13 +282,15 @@ async function generateWithGroq<T = any>(
  * Generate text output using Gemini as primary and Groq as automatic fallback.
  */
 export async function generateText(options: AiRequestOptions): Promise<string> {
+  let geminiErrStr = ""
+
   // 1. Try Gemini
   try {
     const result = await generateWithGemini(options, false)
     return result.text
   } catch (geminiError: unknown) {
-    const safeErr = sanitizeError(geminiError)
-    console.warn(`[AI] Gemini failed: ${safeErr}`)
+    geminiErrStr = sanitizeError(geminiError)
+    console.warn(`[AI] Gemini failed: ${geminiErrStr}`)
     console.log("[AI] Falling back to Groq")
   }
 
@@ -282,10 +299,10 @@ export async function generateText(options: AiRequestOptions): Promise<string> {
     const result = await generateWithGroq(options, false)
     return result.text
   } catch (groqError: unknown) {
-    const safeErr = sanitizeError(groqError)
-    console.error(`[AI] Groq failed: ${safeErr}`)
+    const groqErrStr = sanitizeError(groqError)
+    console.error(`[AI] Groq failed: ${groqErrStr}`)
     console.error("[AI] Both Gemini AND Groq AI providers failed")
-    throw new Error("AI service is temporarily unavailable. Please try again later.")
+    throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: ${groqErrStr})`)
   }
 }
 
@@ -293,13 +310,15 @@ export async function generateText(options: AiRequestOptions): Promise<string> {
  * Generate structured JSON output using Gemini as primary and Groq as automatic fallback.
  */
 export async function generateJson<T = any>(options: AiRequestOptions<T>): Promise<T> {
+  let geminiErrStr = ""
+
   // 1. Try Gemini
   try {
     const result = await generateWithGemini<T>(options, true)
     if (result.data !== undefined) return result.data
   } catch (geminiError: unknown) {
-    const safeErr = sanitizeError(geminiError)
-    console.warn(`[AI] Gemini failed: ${safeErr}`)
+    geminiErrStr = sanitizeError(geminiError)
+    console.warn(`[AI] Gemini failed: ${geminiErrStr}`)
     console.log("[AI] Falling back to Groq")
   }
 
@@ -308,13 +327,13 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
     const result = await generateWithGroq<T>(options, true)
     if (result.data !== undefined) return result.data
   } catch (groqError: unknown) {
-    const safeErr = sanitizeError(groqError)
-    console.error(`[AI] Groq failed: ${safeErr}`)
+    const groqErrStr = sanitizeError(groqError)
+    console.error(`[AI] Groq failed: ${groqErrStr}`)
     console.error("[AI] Both Gemini AND Groq AI providers failed")
-    throw new Error("AI service is temporarily unavailable. Please try again later.")
+    throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: ${groqErrStr})`)
   }
 
-  throw new Error("AI service is temporarily unavailable. Please try again later.")
+  throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: Unknown error)`)
 }
 
 /**

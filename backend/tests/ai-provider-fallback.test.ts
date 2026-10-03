@@ -203,6 +203,6 @@ describe("Centralized AI Provider Fallback System", () => {
 
     await expect(
       generateText({ prompt: "Hello AI" })
-    ).rejects.toThrow("AI service is temporarily unavailable. Please try again later.")
+    ).rejects.toThrow(/AI service is temporarily unavailable/)
   })
 })

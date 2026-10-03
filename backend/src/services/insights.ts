@@ -238,8 +238,9 @@ ${JSON.stringify(sampledFeedback, null, 2)}
         temperature: 0.2
       })
     } catch (aiErr: unknown) {
-      console.error("AI Report Generation Failed (Primary Gemini & Fallback Groq):", sanitizeError(aiErr))
-      return { error: "AI service is temporarily unavailable. Please try again later.", data: null }
+      const safeErr = sanitizeError(aiErr)
+      console.error("AI Report Generation Failed (Primary Gemini & Fallback Groq):", safeErr)
+      return { error: safeErr, data: null }
     }
 
     const reportData: InsightReport = {
