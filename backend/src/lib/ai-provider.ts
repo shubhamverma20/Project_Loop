@@ -11,7 +11,7 @@ export interface AiRequestOptions<T = any> {
 }
 
 // -----------------------------------------------------------------------------
-// HELPER: ENV KEYS & ERROR SANITIZATION
+// HELPER: ENV KEYS, MODELS & ERROR SANITIZATION
 // -----------------------------------------------------------------------------
 
 export function getGeminiApiKey(): string {
@@ -24,6 +24,16 @@ export function getGroqApiKey(): string {
   const key = (process.env.GROQ_API_KEY || "").trim().replace(/^["']|["']$/g, "")
   if (!key || key.startsWith("your_")) return ""
   return key
+}
+
+export function getGeminiModel(): string {
+  const model = (process.env.GEMINI_MODEL || "").trim().replace(/^["']|["']$/g, "")
+  return model || "gemini-2.5-flash"
+}
+
+export function getGroqModel(): string {
+  const model = (process.env.GROQ_MODEL || "").trim().replace(/^["']|["']$/g, "")
+  return model || "openai/gpt-oss-20b"
 }
 
 export function sanitizeError(error: unknown): string {
@@ -61,14 +71,21 @@ async function generateWithGemini<T = any>(
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
   const apiKey = getGeminiApiKey()
+  const isConfigured = Boolean(apiKey)
+  const primaryModel = getGeminiModel()
+
+  console.log(`[AI] Gemini configured: ${isConfigured}`)
+  console.log(`[AI] Gemini model: ${primaryModel}`)
+
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured or invalid")
   }
 
+  console.log("[AI] Gemini request started")
+
   const ai = new GoogleGenAI({ apiKey })
-  const primaryModel = process.env.GEMINI_MODEL || "gemini-2.5-flash"
-  const fallbackModels = ["gemini-1.5-flash", "gemini-2.0-flash", "gemini-3.6-flash", "gemini-3.5-flash"]
-  const modelsToTry = [primaryModel, ...fallbackModels.filter((m) => m !== primaryModel)]
+  const fallbackModels = ["gemini-2.5-flash", "gemini-3.5-flash", "gemini-3.6-flash", "gemini-3.8-flash"]
+  const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
   let lastErr: unknown = null
 
@@ -111,11 +128,11 @@ async function generateWithGemini<T = any>(
 
         const parsed = JSON.parse(textToParse)
         const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
-        console.log(`[AI Provider] Successfully generated output using Gemini (${modelName})`)
+        console.log(`[AI] Gemini success with model: ${modelName}`)
         return { text: rawText, data: validated }
       }
 
-      console.log(`[AI Provider] Successfully generated text using Gemini (${modelName})`)
+      console.log(`[AI] Gemini success with model: ${modelName}`)
       return { text: rawText }
     } catch (err: unknown) {
       lastErr = err
@@ -134,71 +151,89 @@ async function generateWithGroq<T = any>(
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
   const apiKey = getGroqApiKey()
+  const isConfigured = Boolean(apiKey)
+  const primaryModel = getGroqModel()
+
+  console.log(`[AI] Groq configured: ${isConfigured}`)
+  console.log(`[AI] Groq model: ${primaryModel}`)
+
   if (!apiKey) {
     throw new Error("GROQ_API_KEY is not configured or invalid")
   }
 
-  const modelName = process.env.GROQ_MODEL || "llama-3.3-70b-versatile"
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20000)
+  console.log("[AI] Groq request started")
 
-  try {
-    const messages: Array<{ role: string; content: string }> = []
-    if (options.systemInstruction) {
-      messages.push({ role: "system", content: options.systemInstruction })
-    }
-    messages.push({ role: "user", content: options.prompt })
+  const fallbackModels = ["openai/gpt-oss-20b", "openai/gpt-oss-120b", "qwen/qwen3.8-27b", "allam-2-7b"]
+  const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
-    const body: any = {
-      model: modelName,
-      messages,
-      temperature: options.temperature ?? 0.2,
-    }
+  let lastErr: unknown = null
 
-    if (isJson) {
-      body.response_format = { type: "json_object" }
-    }
+  for (const modelName of modelsToTry) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 20000)
 
-    const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
-      signal: controller.signal,
-      body: JSON.stringify(body),
-    })
+    try {
+      const messages: Array<{ role: string; content: string }> = []
+      if (options.systemInstruction) {
+        messages.push({ role: "system", content: options.systemInstruction })
+      }
+      messages.push({ role: "user", content: options.prompt })
 
-    if (!res.ok) {
-      const errText = await res.text().catch(() => "")
-      throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
-    }
-
-    const json: any = await res.json()
-    const rawText = (json?.choices?.[0]?.message?.content || "").trim()
-    if (!rawText) {
-      throw new Error(`Empty response from Groq model ${modelName}`)
-    }
-
-    if (isJson) {
-      let textToParse = rawText
-      if (textToParse.startsWith("```json")) {
-        textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
-      } else if (textToParse.startsWith("```")) {
-        textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
+      const body: any = {
+        model: modelName,
+        messages,
+        temperature: options.temperature ?? 0.2,
       }
 
-      const parsed = JSON.parse(textToParse)
-      const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
-      console.log(`[AI Provider] Successfully generated output using Groq Fallback (${modelName})`)
-      return { text: rawText, data: validated }
-    }
+      if (isJson) {
+        body.response_format = { type: "json_object" }
+      }
 
-    console.log(`[AI Provider] Successfully generated text using Groq Fallback (${modelName})`)
-    return { text: rawText }
-  } finally {
-    clearTimeout(timeoutId)
+      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+        },
+        signal: controller.signal,
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "")
+        throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
+      }
+
+      const json: any = await res.json()
+      const rawText = (json?.choices?.[0]?.message?.content || "").trim()
+      if (!rawText) {
+        throw new Error(`Empty response from Groq model ${modelName}`)
+      }
+
+      if (isJson) {
+        let textToParse = rawText
+        if (textToParse.startsWith("```json")) {
+          textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
+        } else if (textToParse.startsWith("```")) {
+          textToParse = textToParse.replace(/^```/, "").replace(/```$/, "").trim()
+        }
+
+        const parsed = JSON.parse(textToParse)
+        const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
+        console.log(`[AI] Groq success with model: ${modelName}`)
+        return { text: rawText, data: validated }
+      }
+
+      console.log(`[AI] Groq success with model: ${modelName}`)
+      return { text: rawText }
+    } catch (err: unknown) {
+      lastErr = err
+    } finally {
+      clearTimeout(timeoutId)
+    }
   }
+
+  throw new Error(`Groq generation failed: ${sanitizeError(lastErr)}`)
 }
 
 // -----------------------------------------------------------------------------
@@ -214,7 +249,9 @@ export async function generateText(options: AiRequestOptions): Promise<string> {
     const result = await generateWithGemini(options, false)
     return result.text
   } catch (geminiError: unknown) {
-    console.warn(`[AI Provider] Gemini primary failed. Falling back to Groq:`, sanitizeError(geminiError))
+    const safeErr = sanitizeError(geminiError)
+    console.warn(`[AI] Gemini failed: ${safeErr}`)
+    console.log("[AI] Falling back to Groq")
   }
 
   // 2. Try Groq
@@ -222,7 +259,9 @@ export async function generateText(options: AiRequestOptions): Promise<string> {
     const result = await generateWithGroq(options, false)
     return result.text
   } catch (groqError: unknown) {
-    console.error(`[AI Provider] Both Gemini AND Groq AI providers failed:`, sanitizeError(groqError))
+    const safeErr = sanitizeError(groqError)
+    console.error(`[AI] Groq failed: ${safeErr}`)
+    console.error("[AI] Both Gemini AND Groq AI providers failed")
     throw new Error("AI service is temporarily unavailable. Please try again later.")
   }
 }
@@ -236,7 +275,9 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
     const result = await generateWithGemini<T>(options, true)
     if (result.data !== undefined) return result.data
   } catch (geminiError: unknown) {
-    console.warn(`[AI Provider] Gemini primary failed. Falling back to Groq:`, sanitizeError(geminiError))
+    const safeErr = sanitizeError(geminiError)
+    console.warn(`[AI] Gemini failed: ${safeErr}`)
+    console.log("[AI] Falling back to Groq")
   }
 
   // 2. Try Groq
@@ -244,7 +285,9 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
     const result = await generateWithGroq<T>(options, true)
     if (result.data !== undefined) return result.data
   } catch (groqError: unknown) {
-    console.error(`[AI Provider] Both Gemini AND Groq AI providers failed:`, sanitizeError(groqError))
+    const safeErr = sanitizeError(groqError)
+    console.error(`[AI] Groq failed: ${safeErr}`)
+    console.error("[AI] Both Gemini AND Groq AI providers failed")
     throw new Error("AI service is temporarily unavailable. Please try again later.")
   }
 

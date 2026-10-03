@@ -29,7 +29,7 @@ describe("Centralized AI Provider Fallback System", () => {
     expect(sanitized).toContain("[REDACTED_GROQ_KEY]")
   })
 
-  it("should fall back to Groq when Gemini fails with authentication/API key error", async () => {
+  it("should fall back to Groq when Gemini fails (401, 403, 429, 503, quota, invalid model, timeout, network, invalid JSON)", async () => {
     // Set invalid Gemini key & valid mock Groq setup
     process.env.GEMINI_API_KEY = "invalid_gemini_key"
     process.env.GROQ_API_KEY = "gsk_valid_mock_groq_key"
