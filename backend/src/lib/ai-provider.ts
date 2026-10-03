@@ -383,14 +383,55 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
 }
 
 /**
- * Diagnostic helper function to test Gemini directly with a tiny prompt.
+ * Diagnostic helper function to test both Gemini and Groq providers without exposing API keys.
  */
-export async function testGeminiDiagnostic(): Promise<{ success: boolean; message: string }> {
-  try {
-    const res = await generateWithGemini({ prompt: "Reply with exactly: GEMINI_OK", temperature: 0.1 }, false)
-    return { success: true, message: res.text }
-  } catch (err: any) {
-    const details = extractErrorDetails(err)
-    return { success: false, message: `Status: ${details.status}, Code: ${details.code}, Msg: ${details.message}` }
+export async function testAiDiagnostic(): Promise<{
+  gemini: { configured: boolean; success: boolean; status?: string; message?: string };
+  groq: { configured: boolean; success: boolean; status?: string; message?: string };
+}> {
+  const geminiConfigured = Boolean(getGeminiApiKey())
+  const groqKeys = getGroqApiKeysToTry()
+  const groqConfigured = groqKeys.length > 0
+
+  let geminiResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
+    configured: geminiConfigured,
+    success: false,
   }
+
+  if (geminiConfigured) {
+    try {
+      const res = await generateWithGemini({ prompt: "Reply with OK", temperature: 0.1, timeoutMs: 5000 }, false)
+      geminiResult.success = true
+      geminiResult.message = res.text || "Gemini operational"
+    } catch (err: any) {
+      const details = extractErrorDetails(err)
+      geminiResult.success = false
+      geminiResult.status = details.status
+      geminiResult.message = details.message
+    }
+  } else {
+    geminiResult.message = "GEMINI_API_KEY is not configured"
+  }
+
+  let groqResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
+    configured: groqConfigured,
+    success: false,
+  }
+
+  if (groqConfigured) {
+    try {
+      const res = await generateWithGroq({ prompt: "Reply with OK", temperature: 0.1, timeoutMs: 5000 }, false)
+      groqResult.success = true
+      groqResult.message = res.text || "Groq operational"
+    } catch (err: any) {
+      const details = extractErrorDetails(err)
+      groqResult.success = false
+      groqResult.status = details.status
+      groqResult.message = details.message
+    }
+  } else {
+    groqResult.message = "GROQ_API_KEY is not configured"
+  }
+
+  return { gemini: geminiResult, groq: groqResult }
 }

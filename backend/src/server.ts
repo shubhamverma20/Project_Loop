@@ -2,6 +2,7 @@ import "dotenv/config"
 import app from "./app.js"
 import { validateEnv } from "./lib/env.js"
 import { prisma } from "./lib/prisma.js"
+import { getGeminiApiKey, getGroqApiKey, getGeminiModel, getGroqModel } from "./lib/ai-provider.js"
 
 validateEnv()
 
@@ -10,6 +11,10 @@ const PORT = Number(process.env.PORT) || 5000
 const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`🚀 Project LOOP Express Backend running on port ${PORT}`)
   console.log(`📡 CORS configured for origin: ${process.env.FRONTEND_URL || "https://project-loop-fu2f-two.vercel.app"}`)
+  console.log(`[AI] GEMINI_API_KEY configured: ${Boolean(getGeminiApiKey())}`)
+  console.log(`[AI] GROQ_API_KEY configured: ${Boolean(getGroqApiKey())}`)
+  console.log(`[AI] GEMINI_MODEL: ${getGeminiModel()}`)
+  console.log(`[AI] GROQ_MODEL: ${getGroqModel()}`)
 })
 
 // Graceful shutdown handling for always-on production service
