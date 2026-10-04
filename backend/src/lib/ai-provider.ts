@@ -383,7 +383,7 @@ export async function generateJson<T = any>(options: AiRequestOptions<T>): Promi
 }
 
 /**
- * Diagnostic helper function to test both Gemini and Groq providers without exposing API keys.
+ * Diagnostic helper function to test both Gemini and Groq providers with structured JSON generation matching production calls.
  */
 export async function testAiDiagnostic(): Promise<{
   gemini: { configured: boolean; success: boolean; status?: string; message?: string };
@@ -391,8 +391,8 @@ export async function testAiDiagnostic(): Promise<{
 }> {
   const geminiKey = getGeminiApiKey()
   const geminiConfigured = Boolean(geminiKey)
-  const groqKey = getGroqApiKey()
-  const groqConfigured = Boolean(groqKey)
+  const groqKeys = getGroqApiKeysToTry()
+  const groqConfigured = groqKeys.length > 0
 
   let geminiResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
     configured: geminiConfigured,
@@ -401,9 +401,16 @@ export async function testAiDiagnostic(): Promise<{
 
   if (geminiConfigured) {
     try {
-      const res = await generateWithGemini({ prompt: "Reply with OK", temperature: 0.1, timeoutMs: 5000 }, false)
+      const res = await generateWithGemini({
+        prompt: "Respond with status ok",
+        systemInstruction: "Respond with valid JSON only.",
+        responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
+        zSchema: z.object({ status: z.string() }),
+        temperature: 0.1,
+        timeoutMs: 10000
+      }, true)
       geminiResult.success = true
-      geminiResult.message = res.text || "Gemini operational"
+      geminiResult.message = res.data?.status || res.text || "Gemini operational"
     } catch (err: any) {
       const details = extractErrorDetails(err)
       geminiResult.success = false
@@ -421,9 +428,16 @@ export async function testAiDiagnostic(): Promise<{
 
   if (groqConfigured) {
     try {
-      const res = await generateWithGroq({ prompt: "Reply with OK", temperature: 0.1, timeoutMs: 5000 }, false)
+      const res = await generateWithGroq({
+        prompt: "Respond with status ok",
+        systemInstruction: "Respond with valid JSON only.",
+        responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
+        zSchema: z.object({ status: z.string() }),
+        temperature: 0.1,
+        timeoutMs: 10000
+      }, true)
       groqResult.success = true
-      groqResult.message = res.text || "Groq operational"
+      groqResult.message = res.data?.status || res.text || "Groq operational"
     } catch (err: any) {
       const details = extractErrorDetails(err)
       groqResult.success = false
