@@ -15,6 +15,8 @@ const server = app.listen(PORT, "0.0.0.0", () => {
   console.log(`[AI] OPENROUTER_API_KEY configured: ${Boolean(getOpenRouterApiKey())}`)
   console.log(`[AI] NVIDIA_MODEL: ${getNvidiaModel()}`)
   console.log(`[AI] OPENROUTER_MODEL: ${getOpenRouterModel()}`)
+  console.log(`[Email] BREVO_API_KEY configured: ${Boolean(process.env.BREVO_API_KEY)}`)
+  console.log(`[Email] BREVO_SENDER_EMAIL: ${process.env.BREVO_SENDER_EMAIL || "not set"}`)
 })
 
 // Graceful shutdown handling for always-on production service
