@@ -1,4 +1,3 @@
-import { GoogleGenAI } from "@google/genai"
 import { z } from "zod"
 
 export interface AiRequestOptions<T = any> {
@@ -16,47 +15,44 @@ export interface AiRequestOptions<T = any> {
 
 function cleanEnv(name: string): string {
   let value = (process.env[name] || "").trim()
-  // If the whole line "KEY=value" was pasted into the value box, strip the "KEY=" part
   if (value.startsWith(`${name}=`)) value = value.slice(name.length + 1).trim()
   return value.replace(/^["']|["']$/g, "").trim()
 }
 
-export function getGeminiApiKey(): string {
-  const key = cleanEnv("GEMINI_API_KEY")
+export function getNvidiaApiKey(): string {
+  const key = cleanEnv("NVIDIA_API_KEY")
   if (!key || key.startsWith("your_")) return ""
   return key
 }
 
-export function getGroqApiKey(): string {
-  const key = cleanEnv("GROQ_API_KEY")
+export function getOpenRouterApiKey(): string {
+  const key = cleanEnv("OPENROUTER_API_KEY")
   if (!key || key.startsWith("your_")) return ""
   return key
 }
 
-export function getGeminiModel(): string {
-  return cleanEnv("GEMINI_MODEL") || "gemini-3.8-flash"
+export function getNvidiaModel(): string {
+  return cleanEnv("NVIDIA_MODEL") || "meta/llama-3.3-70b-instruct"
 }
 
-export function getGroqModel(): string {
-  return cleanEnv("GROQ_MODEL") || "openai/gpt-oss-20b"
-}
-
-function createGeminiClient(apiKey: string) {
-  return new GoogleGenAI({ apiKey })
+export function getOpenRouterModel(): string {
+  return cleanEnv("OPENROUTER_MODEL") || "meta-llama/llama-3.3-70b-instruct"
 }
 
 export function sanitizeError(error: unknown): string {
   if (!error) return "Unknown error"
   let msg = error instanceof Error ? error.message : String(error)
-  const geminiKey = getGeminiApiKey()
-  const groqKey = getGroqApiKey()
+  const nvidiaKey = getNvidiaApiKey()
+  const openrouterKey = getOpenRouterApiKey()
 
-  if (geminiKey && geminiKey.length > 5) {
-    msg = msg.replaceAll(geminiKey, "[REDACTED_GEMINI_KEY]")
+  if (nvidiaKey && nvidiaKey.length > 5) {
+    msg = msg.replaceAll(nvidiaKey, "[REDACTED_NVIDIA_KEY]")
   }
-  if (groqKey && groqKey.length > 5) {
-    msg = msg.replaceAll(groqKey, "[REDACTED_GROQ_KEY]")
+  if (openrouterKey && openrouterKey.length > 5) {
+    msg = msg.replaceAll(openrouterKey, "[REDACTED_OPENROUTER_KEY]")
   }
+  msg = msg.replace(/nvapi-[A-Za-z0-9_-]{30,}/g, "[REDACTED_KEY]")
+  msg = msg.replace(/sk-or-[A-Za-z0-9_-]{30,}/g, "[REDACTED_KEY]")
   msg = msg.replace(/AIzaSy[A-Za-z0-9_-]{33}/g, "[REDACTED_KEY]")
   msg = msg.replace(/AQ\.[A-Za-z0-9_-]{20,}/g, "[REDACTED_KEY]")
   msg = msg.replace(/gsk_[A-Za-z0-9_-]{20,}/g, "[REDACTED_KEY]")
@@ -88,17 +84,8 @@ function isAuthError(err: unknown): boolean {
   return status === "401" || status === "403"
 }
 
-const withTimeout = <T>(promise: Promise<T>, ms: number): Promise<T> => {
-  return Promise.race([
-    promise,
-    new Promise<T>((_, reject) =>
-      setTimeout(() => reject(new Error(`AI Request timed out after ${ms}ms`)), ms)
-    ),
-  ])
-}
-
 function parseJsonText(rawText: string): any {
-  let textToParse = rawText
+  let textToParse = rawText.trim()
   if (textToParse.startsWith("```json")) {
     textToParse = textToParse.replace(/^```json/, "").replace(/```$/, "").trim()
   } else if (textToParse.startsWith("```")) {
@@ -107,7 +94,6 @@ function parseJsonText(rawText: string): any {
   return JSON.parse(textToParse)
 }
 
-// Converts the Gemini-style responseSchema into a plain-text shape hint for Groq
 function schemaToHint(schema: any): string {
   try {
     return JSON.stringify(schema, null, 1)
@@ -117,108 +103,30 @@ function schemaToHint(schema: any): string {
 }
 
 // -----------------------------------------------------------------------------
-// 1. PRIMARY PROVIDER: GEMINI
+// 1. PRIMARY PROVIDER: NVIDIA
 // -----------------------------------------------------------------------------
 
-async function generateWithGemini<T = any>(
+async function generateWithNvidia<T = any>(
   options: AiRequestOptions<T>,
   isJson: boolean
 ): Promise<{ text: string; data?: T }> {
-  const apiKey = getGeminiApiKey()
-  const primaryModel = getGeminiModel()
+  const apiKey = getNvidiaApiKey()
+  const primaryModel = getNvidiaModel()
 
-  console.log(`[AI] Gemini configured: ${Boolean(apiKey)}`)
-  console.log(`[AI] Gemini model: ${primaryModel}`)
-
-  if (!apiKey) {
-    console.warn("[AI] Gemini failed: status=401, code=MISSING_KEY, message=GEMINI_API_KEY is not configured")
-    throw new Error("GEMINI_API_KEY is not configured or invalid")
-  }
-
-  console.log("[AI] Gemini request started")
-
-  const ai = createGeminiClient(apiKey)
-  const fallbackModels = ["gemini-3.8-flash", "gemini-3.5-flash", "gemini-2.5-flash", "gemini-2.0-flash"]
-  const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
-
-  let lastErr: unknown = null
-
-  for (const modelName of modelsToTry) {
-    try {
-      const config: any = {
-        temperature: options.temperature ?? 0.2,
-      }
-      if (options.systemInstruction) {
-        config.systemInstruction = options.systemInstruction
-      }
-      if (isJson) {
-        config.responseMimeType = "application/json"
-        if (options.responseSchema) {
-          config.responseSchema = options.responseSchema
-        }
-      }
-
-      const response = await withTimeout(
-        ai.models.generateContent({
-          model: modelName,
-          contents: options.prompt,
-          config,
-        }),
-        options.timeoutMs ?? 20000
-      )
-
-      const rawText = (response?.text || "").trim()
-      if (!rawText) {
-        throw new Error(`Empty response from Gemini model ${modelName}`)
-      }
-
-      if (isJson) {
-        const parsed = parseJsonText(rawText)
-        const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
-        console.log(`[AI] Gemini success with model: ${modelName}`)
-        return { text: rawText, data: validated }
-      }
-
-      console.log(`[AI] Gemini success with model: ${modelName}`)
-      return { text: rawText }
-    } catch (err: unknown) {
-      lastErr = err
-      console.warn(`[AI] Gemini ${modelName} failed: ${sanitizeError(err)}`)
-      // Bad key: trying other models is pointless
-      if (isAuthError(err)) break
-    }
-  }
-
-  const details = extractErrorDetails(lastErr)
-  console.warn(`[AI] Gemini failed: status=${details.status}, code=${details.code}`)
-  throw new Error(`Gemini failed: ${details.message}`)
-}
-
-// -----------------------------------------------------------------------------
-// 2. FALLBACK PROVIDER: GROQ
-// -----------------------------------------------------------------------------
-
-async function generateWithGroq<T = any>(
-  options: AiRequestOptions<T>,
-  isJson: boolean
-): Promise<{ text: string; data?: T }> {
-  const apiKey = getGroqApiKey()
-  const primaryModel = getGroqModel()
-
-  console.log(`[AI] Groq configured: ${Boolean(apiKey)}`)
-  console.log(`[AI] Groq model: ${primaryModel}`)
+  console.log(`[AI] NVIDIA configured: ${Boolean(apiKey)}`)
+  console.log(`[AI] NVIDIA model: ${primaryModel}`)
 
   if (!apiKey) {
-    console.error("[AI] Groq failed: status=401, code=MISSING_KEY, message=GROQ_API_KEY is not configured")
-    throw new Error("GROQ_API_KEY is not configured or invalid")
+    console.warn("[AI] NVIDIA failed: status=401, code=MISSING_KEY, message=NVIDIA_API_KEY is not configured")
+    throw new Error("NVIDIA_API_KEY is not configured or invalid")
   }
 
-  console.log("[AI] Groq request started")
+  console.log("[AI] NVIDIA request started")
 
   const fallbackModels = [
-    "openai/gpt-oss-20b",
-    "llama-3.3-70b-versatile",
-    "llama-3.1-8b-instant",
+    "meta/llama-3.3-70b-instruct",
+    "nvidia/llama-3.1-nemotron-70b-instruct",
+    "meta/llama3-70b-instruct",
   ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
@@ -229,8 +137,6 @@ async function generateWithGroq<T = any>(
     const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
 
     try {
-      // Groq json_object mode needs the word "JSON" in the messages,
-      // and Groq does not receive the Gemini responseSchema, so describe the shape in text.
       let systemContent = options.systemInstruction || ""
       if (isJson) {
         systemContent += "\n\nRespond with valid JSON only."
@@ -255,7 +161,7 @@ async function generateWithGroq<T = any>(
         body.response_format = { type: "json_object" }
       }
 
-      const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      const res = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
         method: "POST",
         headers: {
           Authorization: `Bearer ${apiKey}`,
@@ -267,27 +173,27 @@ async function generateWithGroq<T = any>(
 
       if (!res.ok) {
         const errText = await res.text().catch(() => "")
-        throw new Error(`Groq API returned HTTP ${res.status}: ${errText}`)
+        throw new Error(`NVIDIA API returned HTTP ${res.status}: ${errText}`)
       }
 
       const json: any = await res.json()
       const rawText = (json?.choices?.[0]?.message?.content || "").trim()
       if (!rawText) {
-        throw new Error(`Empty response from Groq model ${modelName}`)
+        throw new Error(`Empty response from NVIDIA model ${modelName}`)
       }
 
       if (isJson) {
         const parsed = parseJsonText(rawText)
         const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
-        console.log(`[AI] Groq success with model: ${modelName}`)
+        console.log(`[AI] NVIDIA success with model: ${modelName}`)
         return { text: rawText, data: validated }
       }
 
-      console.log(`[AI] Groq success with model: ${modelName}`)
+      console.log(`[AI] NVIDIA success with model: ${modelName}`)
       return { text: rawText }
     } catch (err: unknown) {
       lastErr = err
-      console.warn(`[AI] Groq ${modelName} failed: ${sanitizeError(err)}`)
+      console.warn(`[AI] NVIDIA ${modelName} failed: ${sanitizeError(err)}`)
       if (isAuthError(err)) break
     } finally {
       clearTimeout(timeoutId)
@@ -295,92 +201,189 @@ async function generateWithGroq<T = any>(
   }
 
   const details = extractErrorDetails(lastErr)
-  console.error(`[AI] Groq failed: status=${details.status}, code=${details.code}`)
-  throw new Error(`Groq failed: ${details.message}`)
+  console.warn(`[AI] NVIDIA failed: status=${details.status}, code=${details.code}`)
+  throw new Error(`NVIDIA failed: ${details.message}`)
+}
+
+// -----------------------------------------------------------------------------
+// 2. FALLBACK PROVIDER: OPENROUTER
+// -----------------------------------------------------------------------------
+
+async function generateWithOpenRouter<T = any>(
+  options: AiRequestOptions<T>,
+  isJson: boolean
+): Promise<{ text: string; data?: T }> {
+  const apiKey = getOpenRouterApiKey()
+  const primaryModel = getOpenRouterModel()
+
+  console.log(`[AI] OpenRouter configured: ${Boolean(apiKey)}`)
+  console.log(`[AI] OpenRouter model: ${primaryModel}`)
+
+  if (!apiKey) {
+    console.error("[AI] OpenRouter failed: status=401, code=MISSING_KEY, message=OPENROUTER_API_KEY is not configured")
+    throw new Error("OPENROUTER_API_KEY is not configured or invalid")
+  }
+
+  console.log("[AI] OpenRouter request started")
+
+  const fallbackModels = [
+    "meta-llama/llama-3.3-70b-instruct",
+    "google/gemini-2.0-flash-lite-preview-02-05:free",
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "deepseek/deepseek-r1:free",
+  ]
+  const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
+
+  let lastErr: unknown = null
+
+  for (const modelName of modelsToTry) {
+    const controller = new AbortController()
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
+
+    try {
+      let systemContent = options.systemInstruction || ""
+      if (isJson) {
+        systemContent += "\n\nRespond with valid JSON only."
+        if (options.responseSchema) {
+          systemContent += `\nThe JSON must follow this schema:\n${schemaToHint(options.responseSchema)}`
+        }
+      }
+
+      const messages: Array<{ role: string; content: string }> = []
+      if (systemContent.trim()) {
+        messages.push({ role: "system", content: systemContent.trim() })
+      }
+      messages.push({ role: "user", content: options.prompt })
+
+      const body: any = {
+        model: modelName,
+        messages,
+        temperature: options.temperature ?? 0.2,
+      }
+
+      if (isJson) {
+        body.response_format = { type: "json_object" }
+      }
+
+      const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          "HTTP-Referer": "https://project-loop.app",
+          "X-Title": "Project LOOP",
+        },
+        signal: controller.signal,
+        body: JSON.stringify(body),
+      })
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => "")
+        throw new Error(`OpenRouter API returned HTTP ${res.status}: ${errText}`)
+      }
+
+      const json: any = await res.json()
+      const rawText = (json?.choices?.[0]?.message?.content || "").trim()
+      if (!rawText) {
+        throw new Error(`Empty response from OpenRouter model ${modelName}`)
+      }
+
+      if (isJson) {
+        const parsed = parseJsonText(rawText)
+        const validated = options.zSchema ? options.zSchema.parse(parsed) : (parsed as T)
+        console.log(`[AI] OpenRouter success with model: ${modelName}`)
+        return { text: rawText, data: validated }
+      }
+
+      console.log(`[AI] OpenRouter success with model: ${modelName}`)
+      return { text: rawText }
+    } catch (err: unknown) {
+      lastErr = err
+      console.warn(`[AI] OpenRouter ${modelName} failed: ${sanitizeError(err)}`)
+      if (isAuthError(err)) break
+    } finally {
+      clearTimeout(timeoutId)
+    }
+  }
+
+  const details = extractErrorDetails(lastErr)
+  console.error(`[AI] OpenRouter failed: status=${details.status}, code=${details.code}`)
+  throw new Error(`OpenRouter failed: ${details.message}`)
 }
 
 // -----------------------------------------------------------------------------
 // PUBLIC CENTRALIZED AI PROVIDER API
 // -----------------------------------------------------------------------------
 
-/**
- * Generate text output using Gemini as primary and Groq as automatic fallback.
- */
 export async function generateText(options: AiRequestOptions): Promise<string> {
-  let geminiErrStr = ""
+  let nvidiaErrStr = ""
 
-  // 1. Try Gemini
+  // 1. Try NVIDIA (Primary)
   try {
-    const result = await generateWithGemini(options, false)
+    const result = await generateWithNvidia(options, false)
     return result.text
-  } catch (geminiError: unknown) {
-    geminiErrStr = sanitizeError(geminiError)
-    console.warn(`[AI] Gemini failed: ${geminiErrStr}`)
-    console.log("[AI] Falling back to Groq")
+  } catch (nvidiaError: unknown) {
+    nvidiaErrStr = sanitizeError(nvidiaError)
+    console.warn(`[AI] NVIDIA failed: ${nvidiaErrStr}`)
+    console.log("[AI] Falling back to OpenRouter")
   }
 
-  // 2. Try Groq
+  // 2. Try OpenRouter (Fallback)
   try {
-    const result = await generateWithGroq(options, false)
+    const result = await generateWithOpenRouter(options, false)
     return result.text
-  } catch (groqError: unknown) {
-    const groqErrStr = sanitizeError(groqError)
-    console.error(`[AI] Groq failed: ${groqErrStr}`)
-    console.error("[AI] Both Gemini AND Groq AI providers failed")
-    throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: ${groqErrStr})`)
+  } catch (openrouterError: unknown) {
+    const openrouterErrStr = sanitizeError(openrouterError)
+    console.error(`[AI] OpenRouter failed: ${openrouterErrStr}`)
+    console.error("[AI] Both NVIDIA AND OpenRouter AI providers failed")
+    throw new Error(`AI service is temporarily unavailable. (NVIDIA: ${nvidiaErrStr} | OpenRouter: ${openrouterErrStr})`)
   }
 }
 
-/**
- * Generate structured JSON output using Gemini as primary and Groq as automatic fallback.
- */
 export async function generateJson<T = any>(options: AiRequestOptions<T>): Promise<T> {
-  let geminiErrStr = ""
+  let nvidiaErrStr = ""
 
-  // 1. Try Gemini
+  // 1. Try NVIDIA (Primary)
   try {
-    const result = await generateWithGemini<T>(options, true)
+    const result = await generateWithNvidia<T>(options, true)
     if (result.data !== undefined) return result.data
-  } catch (geminiError: unknown) {
-    geminiErrStr = sanitizeError(geminiError)
-    console.warn(`[AI] Gemini failed: ${geminiErrStr}`)
-    console.log("[AI] Falling back to Groq")
+  } catch (nvidiaError: unknown) {
+    nvidiaErrStr = sanitizeError(nvidiaError)
+    console.warn(`[AI] NVIDIA failed: ${nvidiaErrStr}`)
+    console.log("[AI] Falling back to OpenRouter")
   }
 
-  // 2. Try Groq
+  // 2. Try OpenRouter (Fallback)
   try {
-    const result = await generateWithGroq<T>(options, true)
+    const result = await generateWithOpenRouter<T>(options, true)
     if (result.data !== undefined) return result.data
-  } catch (groqError: unknown) {
-    const groqErrStr = sanitizeError(groqError)
-    console.error(`[AI] Groq failed: ${groqErrStr}`)
-    console.error("[AI] Both Gemini AND Groq AI providers failed")
-    throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: ${groqErrStr})`)
+  } catch (openrouterError: unknown) {
+    const openrouterErrStr = sanitizeError(openrouterError)
+    console.error(`[AI] OpenRouter failed: ${openrouterErrStr}`)
+    console.error("[AI] Both NVIDIA AND OpenRouter AI providers failed")
+    throw new Error(`AI service is temporarily unavailable. (NVIDIA: ${nvidiaErrStr} | OpenRouter: ${openrouterErrStr})`)
   }
 
-  throw new Error(`AI service is temporarily unavailable. (Gemini: ${geminiErrStr} | Groq: Unknown error)`)
+  throw new Error(`AI service is temporarily unavailable. (NVIDIA: ${nvidiaErrStr} | OpenRouter: Unknown error)`)
 }
 
-/**
- * Diagnostic helper function to test both Gemini and Groq providers with structured JSON generation matching production calls.
- */
 export async function testAiDiagnostic(): Promise<{
-  gemini: { configured: boolean; success: boolean; status?: string; message?: string };
-  groq: { configured: boolean; success: boolean; status?: string; message?: string };
+  nvidia: { configured: boolean; success: boolean; status?: string; message?: string };
+  openrouter: { configured: boolean; success: boolean; status?: string; message?: string };
 }> {
-  const geminiKey = getGeminiApiKey()
-  const geminiConfigured = Boolean(geminiKey)
-  const groqKey = getGroqApiKey()
-  const groqConfigured = Boolean(groqKey)
+  const nvidiaKey = getNvidiaApiKey()
+  const nvidiaConfigured = Boolean(nvidiaKey)
+  const openrouterKey = getOpenRouterApiKey()
+  const openrouterConfigured = Boolean(openrouterKey)
 
-  let geminiResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
-    configured: geminiConfigured,
+  let nvidiaResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
+    configured: nvidiaConfigured,
     success: false,
   }
 
-  if (geminiConfigured) {
+  if (nvidiaConfigured) {
     try {
-      const res = await generateWithGemini({
+      const res = await generateWithNvidia({
         prompt: "Respond with status ok",
         systemInstruction: "Respond with valid JSON only.",
         responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
@@ -388,26 +391,26 @@ export async function testAiDiagnostic(): Promise<{
         temperature: 0.1,
         timeoutMs: 10000
       }, true)
-      geminiResult.success = true
-      geminiResult.message = res.data?.status || res.text || "Gemini operational"
+      nvidiaResult.success = true
+      nvidiaResult.message = res.data?.status || res.text || "NVIDIA operational"
     } catch (err: any) {
       const details = extractErrorDetails(err)
-      geminiResult.success = false
-      geminiResult.status = details.status
-      geminiResult.message = details.message
+      nvidiaResult.success = false
+      nvidiaResult.status = details.status
+      nvidiaResult.message = details.message
     }
   } else {
-    geminiResult.message = "GEMINI_API_KEY is not configured"
+    nvidiaResult.message = "NVIDIA_API_KEY is not configured"
   }
 
-  let groqResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
-    configured: groqConfigured,
+  let openrouterResult: { configured: boolean; success: boolean; status?: string; message?: string } = {
+    configured: openrouterConfigured,
     success: false,
   }
 
-  if (groqConfigured) {
+  if (openrouterConfigured) {
     try {
-      const res = await generateWithGroq({
+      const res = await generateWithOpenRouter({
         prompt: "Respond with status ok",
         systemInstruction: "Respond with valid JSON only.",
         responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
@@ -415,17 +418,17 @@ export async function testAiDiagnostic(): Promise<{
         temperature: 0.1,
         timeoutMs: 10000
       }, true)
-      groqResult.success = true
-      groqResult.message = res.data?.status || res.text || "Groq operational"
+      openrouterResult.success = true
+      openrouterResult.message = res.data?.status || res.text || "OpenRouter operational"
     } catch (err: any) {
       const details = extractErrorDetails(err)
-      groqResult.success = false
-      groqResult.status = details.status
-      groqResult.message = details.message
+      openrouterResult.success = false
+      openrouterResult.status = details.status
+      openrouterResult.message = details.message
     }
   } else {
-    groqResult.message = "GROQ_API_KEY is not configured"
+    openrouterResult.message = "OPENROUTER_API_KEY is not configured"
   }
 
-  return { gemini: geminiResult, groq: groqResult }
+  return { nvidia: nvidiaResult, openrouter: openrouterResult }
 }

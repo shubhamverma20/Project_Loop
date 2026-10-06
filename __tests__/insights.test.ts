@@ -3,27 +3,19 @@ import { generateInsightsReport } from '@/app/actions/insights'
 import { InsightReportSchema } from '@/types/insights'
 import { prisma } from '@/lib/prisma'
 import { verifySession } from '@/lib/auth/session'
-import { GoogleGenAI } from '@google/genai'
-
-// Mock GoogleGenAI
-vi.mock('@google/genai', () => {
-  const MockGoogleGenAI = vi.fn()
-  MockGoogleGenAI.prototype.models = {
-    generateContent: vi.fn().mockResolvedValue({
-      text: JSON.stringify({
-        summary: "Test summary",
-        keyThemes: ["Test theme"],
-        painPoints: ["Test pain"],
-        positiveTrends: [],
-        negativeTrends: [],
-        featureRequests: [],
-        risks: [],
-        recommendedActions: []
-      })
-    })
-  }
-  return { GoogleGenAI: MockGoogleGenAI }
-})
+// Mock AI provider
+vi.mock('@/lib/ai-provider', () => ({
+  generateJson: vi.fn().mockResolvedValue({
+    summary: "Test summary",
+    keyThemes: ["Test theme"],
+    painPoints: ["Test pain"],
+    positiveTrends: [],
+    negativeTrends: [],
+    featureRequests: [],
+    risks: [],
+    recommendedActions: []
+  })
+}))
 
 vi.mock('@/lib/prisma', () => ({
   prisma: {

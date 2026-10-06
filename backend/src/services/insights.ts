@@ -1,6 +1,5 @@
 import { prisma } from "../lib/prisma.js"
 import { subDays, startOfDay, endOfDay } from "date-fns"
-import { Type } from "@google/genai"
 import { DateRange } from "./analytics.js"
 import { generateJson, sanitizeError } from "../lib/ai-provider.js"
 
@@ -165,52 +164,52 @@ Synthesize the provided CALCULATED REAL STATISTICS and customer feedback samples
 Return a raw JSON object ONLY with no markdown wrappers.`
 
     const responseSchema = {
-      type: Type.OBJECT,
+      type: "OBJECT",
       properties: {
-        executiveSummary: { type: Type.STRING },
+        executiveSummary: { type: "STRING" },
         keyTrends: {
-          type: Type.ARRAY,
+          type: "ARRAY",
           items: {
-            type: Type.OBJECT,
+            type: "OBJECT",
             properties: {
-              title: { type: Type.STRING },
-              description: { type: Type.STRING },
-              impact: { type: Type.STRING, enum: ["HIGH", "MEDIUM", "LOW"] }
+              title: { type: "STRING" },
+              description: { type: "STRING" },
+              impact: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] }
             },
             required: ["title", "description", "impact"]
           }
         },
         topCustomerPains: {
-          type: Type.ARRAY,
+          type: "ARRAY",
           items: {
-            type: Type.OBJECT,
+            type: "OBJECT",
             properties: {
-              issue: { type: Type.STRING },
-              frequency: { type: Type.NUMBER },
-              suggestedAction: { type: Type.STRING }
+              issue: { type: "STRING" },
+              frequency: { type: "NUMBER" },
+              suggestedAction: { type: "STRING" }
             },
             required: ["issue", "frequency", "suggestedAction"]
           }
         },
-        notableCustomerQuotes: { type: Type.ARRAY, items: { type: Type.STRING } },
+        notableCustomerQuotes: { type: "ARRAY", items: { type: "STRING" } },
         recommendedActions: {
-          type: Type.ARRAY,
+          type: "ARRAY",
           items: {
-            type: Type.OBJECT,
+            type: "OBJECT",
             properties: {
-              action: { type: Type.STRING },
-              priority: { type: Type.STRING, enum: ["HIGH", "MEDIUM", "LOW"] },
-              rationale: { type: Type.STRING }
+              action: { type: "STRING" },
+              priority: { type: "STRING", enum: ["HIGH", "MEDIUM", "LOW"] },
+              rationale: { type: "STRING" }
             },
             required: ["action", "priority", "rationale"]
           }
         },
         sentimentAnalysis: {
-          type: Type.OBJECT,
+          type: "OBJECT",
           properties: {
-            overallMood: { type: Type.STRING },
-            positiveDrivers: { type: Type.ARRAY, items: { type: Type.STRING } },
-            negativeDrivers: { type: Type.ARRAY, items: { type: Type.STRING } }
+            overallMood: { type: "STRING" },
+            positiveDrivers: { type: "ARRAY", items: { type: "STRING" } },
+            negativeDrivers: { type: "ARRAY", items: { type: "STRING" } }
           },
           required: ["overallMood", "positiveDrivers", "negativeDrivers"]
         }

@@ -26,7 +26,13 @@ services:
         sync: false
       - key: AUTH_GOOGLE_SECRET
         sync: false
-      - key: GEMINI_API_KEY
+      - key: NVIDIA_API_KEY
+        sync: false
+      - key: NVIDIA_MODEL
+        sync: false
+      - key: OPENROUTER_API_KEY
+        sync: false
+      - key: OPENROUTER_MODEL
         sync: false
       - key: BREVO_API_KEY
         sync: false

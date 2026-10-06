@@ -1,4 +1,3 @@
-import { Type } from "@google/genai"
 import { z } from "zod"
 import { generateJson, sanitizeError } from "./ai-provider.js"
 
@@ -46,17 +45,17 @@ The JSON object must strictly match this schema:
 }${themeContext}`
 
   const responseSchema = {
-    type: Type.OBJECT,
+    type: "OBJECT",
     properties: {
-      sentiment: { type: Type.STRING, enum: ["POS", "NEU", "NEG"] },
-      sentimentScore: { type: Type.NUMBER },
-      themes: { type: Type.ARRAY, items: { type: Type.STRING } },
-      featureArea: { type: Type.STRING },
+      sentiment: { type: "STRING", enum: ["POS", "NEU", "NEG"] },
+      sentimentScore: { type: "NUMBER" },
+      themes: { type: "ARRAY", items: { type: "STRING" } },
+      featureArea: { type: "STRING" },
       category: {
-        type: Type.STRING,
+        type: "STRING",
         enum: ["Bug", "Feature Request", "Complaint", "Praise", "Question", "Other"],
       },
-      rationale: { type: Type.STRING },
+      rationale: { type: "STRING" },
     },
     required: ["sentiment", "sentimentScore", "themes", "featureArea", "category", "rationale"],
   }

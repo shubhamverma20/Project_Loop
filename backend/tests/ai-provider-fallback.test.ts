@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import { generateJson, generateText, sanitizeError } from "../src/lib/ai-provider.js"
 import { z } from "zod"
 
-describe("Centralized AI Provider Fallback System", () => {
+describe("Centralized AI Provider Fallback System (NVIDIA Primary & OpenRouter Fallback)", () => {
   const originalEnv = { ...process.env }
 
   beforeEach(() => {
@@ -15,47 +15,35 @@ describe("Centralized AI Provider Fallback System", () => {
   })
 
   it("TEST 0: should sanitize API keys from error messages", () => {
-    process.env.GEMINI_API_KEY = "AIzaSyTestGeminiSecretKey1234567890"
-    process.env.GROQ_API_KEY = "gsk_TestGroqSecretKey12345678901234567890"
+    process.env.NVIDIA_API_KEY = "nvapi-TestNvidiaSecretKey12345678901234567890"
+    process.env.OPENROUTER_API_KEY = "sk-or-TestOpenRouterSecretKey12345678901234567890"
 
     const rawError = new Error(
-      `Failed with key AIzaSyTestGeminiSecretKey1234567890 and groq gsk_TestGroqSecretKey12345678901234567890`
+      `Failed with key nvapi-TestNvidiaSecretKey12345678901234567890 and openrouter sk-or-TestOpenRouterSecretKey12345678901234567890`
     )
     const sanitized = sanitizeError(rawError)
 
-    expect(sanitized).not.toContain("AIzaSyTestGeminiSecretKey1234567890")
-    expect(sanitized).not.toContain("gsk_TestGroqSecretKey12345678901234567890")
-    expect(sanitized).toContain("[REDACTED_GEMINI_KEY]")
-    expect(sanitized).toContain("[REDACTED_GROQ_KEY]")
+    expect(sanitized).not.toContain("nvapi-TestNvidiaSecretKey12345678901234567890")
+    expect(sanitized).not.toContain("sk-or-TestOpenRouterSecretKey12345678901234567890")
+    expect(sanitized).toContain("[REDACTED_NVIDIA_KEY]")
+    expect(sanitized).toContain("[REDACTED_OPENROUTER_KEY]")
   })
 
-  it("TEST 1: Gemini succeeds -> Groq NOT called", async () => {
-    process.env.GEMINI_API_KEY = "mock_gemini_test_key_12345"
-    process.env.GROQ_API_KEY = "gsk_mock_groq_test_key_12345"
+  it("TEST 1: NVIDIA succeeds -> OpenRouter NOT called", async () => {
+    process.env.NVIDIA_API_KEY = "nvapi-mock-nvidia-key"
+    process.env.OPENROUTER_API_KEY = "sk-or-mock-openrouter-key"
 
     const fetchSpy = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes("generativelanguage.googleapis.com") || url.includes("google")) {
+      if (url.includes("nvidia.com")) {
         return {
           ok: true,
           status: 200,
           headers: new Headers({ "content-type": "application/json" }),
           text: async () => JSON.stringify({
-            candidates: [
-              {
-                content: {
-                  parts: [{ text: "Gemini response" }]
-                }
-              }
-            ]
+            choices: [{ message: { content: "NVIDIA text response" } }]
           }),
           json: async () => ({
-            candidates: [
-              {
-                content: {
-                  parts: [{ text: "Gemini response" }]
-                }
-              }
-            ]
+            choices: [{ message: { content: "NVIDIA text response" } }]
           }),
         } as any
       }
@@ -70,18 +58,18 @@ describe("Centralized AI Provider Fallback System", () => {
     global.fetch = fetchSpy
 
     const result = await generateText({ prompt: "Hello" })
-    expect(result).toBe("Gemini response")
+    expect(result).toBe("NVIDIA text response")
     expect(fetchSpy).toHaveBeenCalled()
     const calledUrls = fetchSpy.mock.calls.map(call => String(call[0]))
-    expect(calledUrls.some(u => u.includes("groq.com"))).toBe(false)
+    expect(calledUrls.some(u => u.includes("openrouter.ai"))).toBe(false)
   })
 
-  it("TEST 2: Gemini 429 / failure -> Groq called -> report generated", async () => {
-    process.env.GEMINI_API_KEY = "invalid_gemini_key"
-    process.env.GROQ_API_KEY = "gsk_valid_mock_groq_key"
+  it("TEST 2: NVIDIA 429 / failure -> OpenRouter called -> report generated", async () => {
+    process.env.NVIDIA_API_KEY = "invalid_nvidia_key"
+    process.env.OPENROUTER_API_KEY = "sk-or-valid-openrouter-key"
 
     const fetchSpy = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes("groq.com")) {
+      if (url.includes("openrouter.ai")) {
         return {
           ok: true,
           status: 200,
@@ -90,7 +78,7 @@ describe("Centralized AI Provider Fallback System", () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify({ summary: "Generated via Groq", status: "OK" }),
+                  content: JSON.stringify({ summary: "Generated via OpenRouter", status: "OK" }),
                 },
               },
             ],
@@ -99,7 +87,7 @@ describe("Centralized AI Provider Fallback System", () => {
             choices: [
               {
                 message: {
-                  content: JSON.stringify({ summary: "Generated via Groq", status: "OK" }),
+                  content: JSON.stringify({ summary: "Generated via OpenRouter", status: "OK" }),
                 },
               },
             ],
@@ -122,24 +110,24 @@ describe("Centralized AI Provider Fallback System", () => {
     })
 
     expect(fetchSpy).toHaveBeenCalled()
-    expect(result).toEqual({ summary: "Generated via Groq", status: "OK" })
+    expect(result).toEqual({ summary: "Generated via OpenRouter", status: "OK" })
   })
 
-  it("TEST 3 & 4 & 5: Gemini 401/403/5xx/timeout -> Groq called -> report generated", async () => {
-    process.env.GEMINI_API_KEY = "invalid_gemini_key_401"
-    process.env.GROQ_API_KEY = "gsk_valid_groq_key"
+  it("TEST 3 & 4 & 5: NVIDIA 401/403/5xx/timeout -> OpenRouter called -> text response", async () => {
+    process.env.NVIDIA_API_KEY = "invalid_nvidia_key_401"
+    process.env.OPENROUTER_API_KEY = "sk-or-valid-openrouter-key"
 
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes("groq.com")) {
+      if (url.includes("openrouter.ai")) {
         return {
           ok: true,
           status: 200,
           headers: new Headers({ "content-type": "application/json" }),
           text: async () => JSON.stringify({
-            choices: [{ message: { content: "Groq text response" } }],
+            choices: [{ message: { content: "OpenRouter text response" } }],
           }),
           json: async () => ({
-            choices: [{ message: { content: "Groq text response" } }],
+            choices: [{ message: { content: "OpenRouter text response" } }],
           }),
         } as any
       }
@@ -153,24 +141,24 @@ describe("Centralized AI Provider Fallback System", () => {
     })
 
     const text = await generateText({ prompt: "Test prompt" })
-    expect(text).toBe("Groq text response")
+    expect(text).toBe("OpenRouter text response")
   })
 
-  it("TEST 6: Gemini fails + Groq succeeds -> Generate Report works", async () => {
-    process.env.GEMINI_API_KEY = "invalid"
-    process.env.GROQ_API_KEY = "valid"
+  it("TEST 6: NVIDIA fails + OpenRouter succeeds -> Generate Report works", async () => {
+    process.env.NVIDIA_API_KEY = "invalid"
+    process.env.OPENROUTER_API_KEY = "valid"
 
     global.fetch = vi.fn().mockImplementation(async (url: string) => {
-      if (url.includes("groq.com")) {
+      if (url.includes("openrouter.ai")) {
         return {
           ok: true,
           status: 200,
           headers: new Headers({ "content-type": "application/json" }),
           text: async () => JSON.stringify({
-            choices: [{ message: { content: JSON.stringify({ executiveSummary: "VoC Report Success" }) } }],
+            choices: [{ message: { content: JSON.stringify({ executiveSummary: "VoC Report Success via OpenRouter" }) } }],
           }),
           json: async () => ({
-            choices: [{ message: { content: JSON.stringify({ executiveSummary: "VoC Report Success" }) } }],
+            choices: [{ message: { content: JSON.stringify({ executiveSummary: "VoC Report Success via OpenRouter" }) } }],
           }),
         } as any
       }
@@ -184,20 +172,20 @@ describe("Centralized AI Provider Fallback System", () => {
     })
 
     const res = await generateJson({ prompt: "Report generation" })
-    expect(res).toEqual({ executiveSummary: "VoC Report Success" })
+    expect(res).toEqual({ executiveSummary: "VoC Report Success via OpenRouter" })
   })
 
-  it("TEST 7: Gemini fails + Groq fails -> proper final error", async () => {
-    process.env.GEMINI_API_KEY = "invalid_gemini_key"
-    process.env.GROQ_API_KEY = "invalid_groq_key"
+  it("TEST 7: NVIDIA fails + OpenRouter fails -> proper final error", async () => {
+    process.env.NVIDIA_API_KEY = "invalid_nvidia_key"
+    process.env.OPENROUTER_API_KEY = "invalid_openrouter_key"
 
     global.fetch = vi.fn().mockImplementation(async () => {
       return {
         ok: false,
         status: 401,
         headers: new Headers(),
-        text: async () => "Unauthorized Groq Key",
-        json: async () => ({ error: "Unauthorized Groq Key" })
+        text: async () => "Unauthorized OpenRouter Key",
+        json: async () => ({ error: "Unauthorized OpenRouter Key" })
       } as any
     })
 

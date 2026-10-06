@@ -160,7 +160,7 @@ export default function InsightsPage() {
             AI Insights <Sparkles className="w-5 h-5 text-blue-500 shrink-0" />
           </h1>
           <p className="text-xs sm:text-sm text-zinc-500 dark:text-zinc-400 mt-1">
-            Gemini AI analysis of customer feedback. Generates themes, risks, and recommendations.
+            AI analysis of customer feedback. Generates themes, risks, and recommendations.
           </p>
         </div>
 
