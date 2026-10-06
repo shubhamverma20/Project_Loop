@@ -228,10 +228,11 @@ async function generateWithOpenRouter<T = any>(
   console.log("[AI] OpenRouter request started")
 
   const fallbackModels = [
-    "meta-llama/llama-3.3-70b-instruct",
-    "google/gemini-2.0-flash-lite-preview-02-05:free",
-    "meta-llama/llama-3.1-8b-instruct:free",
-    "deepseek/deepseek-r1:free",
+    "openrouter/auto",
+    "deepseek/deepseek-r1",
+    "meta-llama/llama-3.3-70b-instruct:free",
+    "google/gemini-2.0-flash-lite-001",
+    "mistralai/mistral-7b-instruct:free",
   ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
