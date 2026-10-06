@@ -124,9 +124,10 @@ async function generateWithNvidia<T = any>(
   console.log("[AI] NVIDIA request started")
 
   const fallbackModels = [
+    "meta/llama-3.1-70b-instruct",
+    "mistralai/mistral-large-2-instruct",
+    "deepseek-ai/deepseek-r1",
     "meta/llama-3.3-70b-instruct",
-    "nvidia/llama-3.1-nemotron-70b-instruct",
-    "meta/llama3-70b-instruct",
   ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
