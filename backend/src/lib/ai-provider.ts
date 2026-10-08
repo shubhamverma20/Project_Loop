@@ -135,7 +135,7 @@ async function generateWithNvidia<T = any>(
 
   for (const modelName of modelsToTry) {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 60000)
 
     try {
       let systemContent = options.systemInstruction || ""
@@ -240,7 +240,7 @@ async function generateWithOpenRouter<T = any>(
 
   for (const modelName of modelsToTry) {
     const controller = new AbortController()
-    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 25000)
+    const timeoutId = setTimeout(() => controller.abort(), options.timeoutMs ?? 60000)
 
     try {
       let systemContent = options.systemInstruction || ""
