@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 
 const defaultApiUrl = process.env.NODE_ENV === "production"
-  ? "https://project-loop-llid.onrender.com"
+  ? "https://project-loop-1-5zzp.onrender.com"
   : "http://localhost:5000"
 
 const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
