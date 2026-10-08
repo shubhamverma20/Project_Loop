@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const defaultApiUrl = process.env.NODE_ENV === "production"
-  ? "https://project-loop-1-5zzp.onrender.com"
-  : "http://localhost:5000"
-
-const BACKEND_URL = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
+const defaultApiUrl = "https://project-loop-1-5zzp.onrender.com"
+const BACKEND_URL = (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.includes("1-5zzp"))
+  ? process.env.NEXT_PUBLIC_API_URL
+  : defaultApiUrl
 
 async function proxyRequest(req: NextRequest, { params }: { params: { path: string[] } }) {
   try {

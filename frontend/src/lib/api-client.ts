@@ -1,5 +1,7 @@
-const defaultApiUrl = "http://localhost:5000"
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || defaultApiUrl
+const defaultApiUrl = typeof window !== "undefined" ? "" : "https://project-loop-1-5zzp.onrender.com"
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL && process.env.NEXT_PUBLIC_API_URL.includes("1-5zzp"))
+  ? process.env.NEXT_PUBLIC_API_URL
+  : defaultApiUrl
 
 export async function apiRequest<T = any>(
   endpoint: string,
