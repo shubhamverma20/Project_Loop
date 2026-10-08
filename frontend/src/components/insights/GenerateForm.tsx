@@ -19,6 +19,7 @@ export function GenerateForm({ onGenerated }: { onGenerated?: () => void }) {
       if (res.error) {
         setError(res.error)
       } else {
+        setError(null)
         if (onGenerated) onGenerated()
       }
     } catch {
