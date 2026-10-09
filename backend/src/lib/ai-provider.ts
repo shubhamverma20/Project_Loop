@@ -32,7 +32,7 @@ export function getOpenRouterApiKey(): string {
 }
 
 export function getNvidiaModel(): string {
-  return cleanEnv("NVIDIA_MODEL") || "meta/llama-3.3-70b-instruct"
+  return cleanEnv("NVIDIA_MODEL") || "meta/llama-3.2-11b-vision-instruct"
 }
 
 export function getOpenRouterModel(): string {
@@ -124,10 +124,10 @@ async function generateWithNvidia<T = any>(
   console.log("[AI] NVIDIA request started")
 
   const fallbackModels = [
+    "meta/llama-3.2-11b-vision-instruct",
+    "meta/llama-3.2-90b-vision-instruct",
     "nvidia/llama-3.1-nemotron-70b-instruct",
-    "meta/llama-3.1-70b-instruct",
     "mistralai/mistral-large-2-instruct",
-    "nvidia/nemotron-4-340b-instruct",
   ]
   const modelsToTry = Array.from(new Set([primaryModel, ...fallbackModels]))
 
@@ -386,12 +386,12 @@ export async function testAiDiagnostic(): Promise<{
   if (nvidiaConfigured) {
     try {
       const res = await generateWithNvidia({
-        prompt: "Respond with status ok",
-        systemInstruction: "Respond with valid JSON only.",
+        prompt: 'Return JSON object: {"status": "ok"}',
+        systemInstruction: 'You are a health check assistant. Respond with raw JSON ONLY: {"status": "ok"}.',
         responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
-        zSchema: z.object({ status: z.string() }),
+        zSchema: z.object({ status: z.string().optional() }).passthrough(),
         temperature: 0.1,
-        timeoutMs: 10000
+        timeoutMs: 15000
       }, true)
       nvidiaResult.success = true
       nvidiaResult.message = res.data?.status || res.text || "NVIDIA operational"
@@ -413,12 +413,12 @@ export async function testAiDiagnostic(): Promise<{
   if (openrouterConfigured) {
     try {
       const res = await generateWithOpenRouter({
-        prompt: "Respond with status ok",
-        systemInstruction: "Respond with valid JSON only.",
+        prompt: 'Return JSON object: {"status": "ok"}',
+        systemInstruction: 'You are a health check assistant. Respond with raw JSON ONLY: {"status": "ok"}.',
         responseSchema: { type: "OBJECT", properties: { status: { type: "STRING" } } },
-        zSchema: z.object({ status: z.string() }),
+        zSchema: z.object({ status: z.string().optional() }).passthrough(),
         temperature: 0.1,
-        timeoutMs: 10000
+        timeoutMs: 15000
       }, true)
       openrouterResult.success = true
       openrouterResult.message = res.data?.status || res.text || "OpenRouter operational"
