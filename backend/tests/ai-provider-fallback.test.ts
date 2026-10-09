@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
-import { generateJson, generateText, sanitizeError } from "../src/lib/ai-provider.js"
+import { generateJson, generateText, sanitizeError, testAiDiagnostic } from "../src/lib/ai-provider.js"
 import { z } from "zod"
 
 describe("Centralized AI Provider Fallback System (NVIDIA Primary & OpenRouter Fallback)", () => {
@@ -192,5 +192,75 @@ describe("Centralized AI Provider Fallback System (NVIDIA Primary & OpenRouter F
     await expect(
       generateText({ prompt: "Hello AI" })
     ).rejects.toThrow(/AI service is temporarily unavailable/)
+  })
+
+  it("TEST 8: NVIDIA HTTP 404 failure ('Not found for account') -> OpenRouter fallback succeeds", async () => {
+    process.env.NVIDIA_API_KEY = "nvapi-mock-nvidia-key-404"
+    process.env.OPENROUTER_API_KEY = "sk-or-valid-openrouter-key"
+
+    const fetchSpy = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("nvidia.com")) {
+        return {
+          ok: false,
+          status: 404,
+          headers: new Headers(),
+          text: async () => JSON.stringify({ status: 404, title: "Not Found", detail: "Function 'xyz': Not found for account '516mK49188a9CeL52eiImqAj9iNbZOLPEJZJi051F1M'" }),
+          json: async () => ({ status: 404, title: "Not Found", detail: "Function 'xyz': Not found for account '516mK49188a9CeL52eiImqAj9iNbZOLPEJZJi051F1M'" })
+        } as any
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        text: async () => JSON.stringify({
+          choices: [{ message: { content: "OpenRouter fallback text after NVIDIA 404" } }]
+        }),
+        json: async () => ({
+          choices: [{ message: { content: "OpenRouter fallback text after NVIDIA 404" } }]
+        })
+      } as any
+    })
+    global.fetch = fetchSpy
+
+    const text = await generateText({ prompt: "Test NVIDIA 404 fallback" })
+    expect(text).toBe("OpenRouter fallback text after NVIDIA 404")
+  })
+
+  it("TEST 9: testAiDiagnostic reports provider configured status, success/failure, and safe error message", async () => {
+    process.env.NVIDIA_API_KEY = "nvapi-mock-nvidia-key-404"
+    process.env.OPENROUTER_API_KEY = "sk-or-valid-openrouter-key"
+
+    global.fetch = vi.fn().mockImplementation(async (url: string) => {
+      if (url.includes("nvidia.com")) {
+        return {
+          ok: false,
+          status: 404,
+          headers: new Headers(),
+          text: async () => "NVIDIA 404 Not Found",
+          json: async () => ({ error: "NVIDIA 404 Not Found" })
+        } as any
+      }
+      return {
+        ok: true,
+        status: 200,
+        headers: new Headers({ "content-type": "application/json" }),
+        text: async () => JSON.stringify({
+          choices: [{ message: { content: JSON.stringify({ status: "ok" }) } }]
+        }),
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ status: "ok" }) } }]
+        })
+      } as any
+    })
+
+    const diag = await testAiDiagnostic()
+    expect(diag.nvidia.configured).toBe(true)
+    expect(diag.nvidia.success).toBe(false)
+    expect(diag.nvidia.status).toBe("404")
+    expect(diag.nvidia.message).toContain("NVIDIA 404")
+
+    expect(diag.openrouter.configured).toBe(true)
+    expect(diag.openrouter.success).toBe(true)
+    expect(diag.openrouter.message).toBe("ok")
   })
 })
