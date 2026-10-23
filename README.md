@@ -1,11 +1,13 @@
 # 🚀 Project LOOP - Customer Feedback & AI Analytics Platform
 
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-181717?logo=github)](https://github.com/shubhamverma20/Project_Loop)
 [![E2E Tests](https://img.shields.io/badge/Playwright-E2E%20Passing-brightgreen?logo=playwright)](https://playwright.dev)
 [![Backend Tests](https://img.shields.io/badge/Vitest-Backend%20Passing-blue?logo=vitest)](https://vitest.dev)
 [![Next.js](https://img.shields.io/badge/Next.js-14%20App%20Router-black?logo=next.js)](https://nextjs.org)
 [![Express](https://img.shields.io/badge/Express-Backend-lightgrey?logo=express)](https://expressjs.com)
 [![PostgreSQL](https://img.shields.io/badge/Neon-PostgreSQL%20%2B%20pgvector-blue?logo=postgresql)](https://neon.tech)
-[![Gemini AI](https://img.shields.io/badge/Google%20Gemini-AI%20Engine-orange?logo=google)](https://ai.google.dev)
+[![NVIDIA AI](https://img.shields.io/badge/NVIDIA-Primary%20AI%20Engine-76B900?logo=nvidia)](https://build.nvidia.com)
+[![OpenRouter](https://img.shields.io/badge/OpenRouter-AI%20Fallback-6366F1)](https://openrouter.ai)
 
 ---
 
@@ -16,13 +18,14 @@
 * **Frontend**: Next.js 14 App Router, Tailwind CSS, Recharts, Lucide Icons, and PapaParse.
 * **Backend**: Express.js REST API with Server-Sent Events (SSE) for real-time live streaming feedback.
 * **Database**: Neon Serverless PostgreSQL with Prisma ORM and `pgvector` extension.
-* **AI Engine**: **Google Gemini AI** (`@google/genai`) for automated sentiment scoring, tag extraction, auto-categorization, and executive report generation.
+* **AI Engine**: Dual AI Engine with resilient fallback — **NVIDIA AI Foundation Models** (Primary) with automated fallback to **OpenRouter AI** (Llama 3.3 70B Instruct) for sentiment analysis, category tagging, pain point extraction, executive reports, and the interactive Ask LOOP conversational assistant.
 * **Security & Auth**: Dual authentication via HTTP-Only JWT cookies or `Bearer` tokens, Google OAuth 2.0, and Brevo Email OTP verification.
 
-### 🌐 Live Production Deployments
-* **Live Frontend App**: [project-loop-fu2f-git-main-shubhamverma20s-projects.vercel.app](https://project-loop-fu2f-git-main-shubhamverma20s-projects.vercel.app)
+### 🌐 Live Production Deployments & Links
+* **Live Frontend App**: [project-loop-fu2f-two.vercel.app](https://project-loop-fu2f-two.vercel.app)
 * **Live Backend API**: [https://project-loop-1-5zzp.onrender.com](https://project-loop-1-5zzp.onrender.com)
 * **API Health Check**: `https://project-loop-1-5zzp.onrender.com/health`
+* **GitHub Repository**: [https://github.com/shubhamverma20/Project_Loop](https://github.com/shubhamverma20/Project_Loop)
 * **Testing**: Comprehensive E2E testing suite powered by **Playwright** and backend unit/integration tests with **Vitest**.
 
 ---
@@ -32,7 +35,7 @@
 - 🔐 **Authentication & Sessions**: Email/Password Registration & Login, Google One-Tap Sign-In, Password Reset via Brevo 6-digit OTP, Session management with `GET /api/auth/me`.
 - 📥 **Smart CSV Importer**: Automated column header analysis and synonym mapping supporting Customer Feedback CSVs (content, review, comment, rating) and E-Commerce Product Catalog CSVs.
 - ⚡ **Real-Time Live Streaming (SSE)**: Server-Sent Events endpoint pushing real-time customer feedback updates directly to the UI.
-- 🤖 **AI Executive Insights**: Powered by Google Gemini AI (`@google/genai`) for automatic sentiment classification, pain point extraction, and downloadable executive summary reports.
+- 🤖 **AI Executive Insights & Ask LOOP**: Dual AI Engine powered by **NVIDIA AI** (Primary) and **OpenRouter** (Fallback) featuring automatic sentiment scoring, pain point extraction, category detection, downloadable executive reports, and conversational query assistant (`Ask LOOP`).
 - 📊 **Interactive Analytics Dashboard**: Filter feedback by date range (`7d`, `30d`, `90d`, `custom`), channel, sentiment distribution, and category trends.
 - 🛡️ **Role-Based Access Control (RBAC)**: Admin, Analyst, and Viewer permissions for team management and workspace settings.
 
@@ -47,9 +50,10 @@ Project_Loop/
 │   │   ├── schema.prisma
 │   │   └── seed.ts
 │   ├── src/
+│   │   ├── lib/              # Centralized Dual AI Provider (NVIDIA + OpenRouter), Prisma DB, Env
 │   │   ├── middleware/       # Auth JWT, CORS, Error Handling, Rate Limiting
 │   │   ├── routes/           # Auth, Feedback, CSV, Analytics, Insights, Reports, Settings
-│   │   ├── services/         # Gemini AI, CSV Processing, Brevo OTP, Ingestion
+│   │   ├── services/         # Ask LOOP AI, Ingestion, Insights, CSV, Brevo OTP, Settings
 │   │   └── server.ts         # Server entry point
 │   ├── tests/                # Vitest test suite
 │   └── package.json
@@ -91,8 +95,13 @@ AUTH_SECRET="your-secure-auth-secret"
 GOOGLE_CLIENT_ID="your-google-client-id"
 GOOGLE_CLIENT_SECRET="your-google-client-secret"
 
-# AI & Email Services
-GEMINI_API_KEY="your-gemini-api-key"
+# Dual AI Processing (NVIDIA Primary + OpenRouter Fallback)
+NVIDIA_API_KEY="nvapi-your-nvidia-api-key"
+NVIDIA_MODEL="meta/llama-3.3-70b-instruct"
+OPENROUTER_API_KEY="sk-or-v1-your-openrouter-api-key"
+OPENROUTER_MODEL="meta-llama/llama-3.3-70b-instruct"
+
+# Email Services (Brevo OTP)
 BREVO_API_KEY="your-brevo-api-key"
 BREVO_SENDER_EMAIL="your-email@domain.com"
 BREVO_SENDER_NAME="Project LOOP"
